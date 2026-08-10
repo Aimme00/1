@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="问数 AI 数据分析 Agent" />
+    <title>问数 · AI 数据分析</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./dashboard.css" />
+  </head>
+  <body>
+    <section class="auth-screen" id="authScreen" aria-labelledby="loginTitle">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="brand-mark">问</span><span><strong>问数</strong><small>SECURE ANALYTICS</small></span></div>
+        <p class="eyebrow">WELCOME BACK</p>
+        <h1 id="loginTitle">登录数据分析工作台</h1>
+        <p class="auth-copy">登录后，你的会话、分析结果和下载报表将与个人账号安全绑定。</p>
+        <form id="loginForm" class="login-form">
+          <label for="loginEmail">邮箱</label>
+          <input id="loginEmail" type="email" autocomplete="username" placeholder="name@company.com" required />
+          <label for="loginPassword">密码</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="输入登录密码" required />
+          <p class="login-error hidden" id="loginError" role="alert"></p>
+          <button type="submit" id="loginButton">登录工作台</button>
+        </form>
+        <p class="auth-note">本地演示账号请查看项目 README；正式部署前请更换初始化密码并启用 HTTPS。</p>
+      </div>
+    </section>
+
+    <div class="app-shell auth-hidden" id="appShell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="问数首页">
+          <span class="brand-mark">问</span>
+          <span><strong>问数</strong><small>AI Analytics</small></span>
+        </a>
+        <button class="new-chat" id="newChatButton"><span>+</span> 新建分析</button>
+        <button class="dashboard-nav-button" id="dashboardButton"><span>▦</span> 我的仪表盘 <b id="dashboardCount">0</b></button>
+        <div class="nav-label">最近会话</div>
+        <nav class="conversation-list" id="conversationList">
+          <div class="empty-nav">还没有历史分析</div>
+        </nav>
+        <div class="nav-label saved-label">已保存分析</div>
+        <nav class="saved-analysis-list" id="savedAnalysisList">
+          <div class="empty-nav">还没有保存结果</div>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="data-source" id="dataSourceStatus"><span class="status-dot" id="dataSourceDot"></span><span><strong id="dataSourceName">正在检查数据源</strong><small id="dataSourceMeta">连接状态未知</small></span></div>
+          <button class="icon-button sync-source hidden" id="syncDataSourceButton" title="测试连接并同步 Schema" aria-label="测试连接并同步 Schema">↻</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu" aria-label="展开菜单">☰</button>
+          <div><span class="eyebrow">问数工作台</span><h1>数据洞察助手</h1></div>
+          <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="account-button" id="logoutButton" title="退出登录"><span class="avatar" id="userAvatar">DA</span><span class="account-name" id="accountName">Data Analyst</span><span class="logout-label">退出</span></button></div>
+        </header>
+
+        <section class="chat-stage" id="chatStage">
+          <section class="dashboard-view hidden" id="dashboardView">
+            <div class="dashboard-heading">
+              <div><p class="eyebrow">PERSONAL DASHBOARD</p><h2 id="dashboardTitle">我的仪表盘</h2><p id="dashboardDescription">集中查看保存的数据洞察。</p></div>
+              <button id="deleteDashboardButton" class="result-action">删除仪表盘</button>
+            </div>
+            <div class="dashboard-grid" id="dashboardGrid"></div>
+            <div class="dashboard-empty hidden" id="dashboardEmpty"><span>▦</span><h3>仪表盘还是空的</h3><p>完成一次分析后，点击“添加到仪表盘”。</p></div>
+          </section>
+
+          <div class="welcome" id="welcomePanel">
+            <div class="welcome-orb"><span>✦</span></div>
+            <p class="eyebrow">NATURAL LANGUAGE → INSIGHT</p>
+            <h2>今天想从数据里发现什么？</h2>
+            <p>直接提问，问数会自动生成安全 SQL、分析结果并推荐合适的图表。</p>
+            <div class="suggestion-grid">
+              <button class="suggestion" data-query="最近30天销售额趋势如何？"><span class="suggestion-icon blue">↗</span><span><strong>分析趋势</strong><small>最近30天销售额趋势如何？</small></span></button>
+              <button class="suggestion" data-query="各区域订单量排名是什么？"><span class="suggestion-icon violet">≡</span><span><strong>对比排名</strong><small>各区域订单量排名是什么？</small></span></button>
+              <button class="suggestion" data-query="找出销售额异常的日期并说明原因"><span class="suggestion-icon amber">!</span><span><strong>发现异常</strong><small>找出销售额异常的日期</small></span></button>
+              <button class="suggestion" data-query="销售额最高的前5个产品是哪些？"><span class="suggestion-icon green">★</span><span><strong>业务洞察</strong><small>销售额最高的前5个产品</small></span></button>
+            </div>
+          </div>
+
+          <div class="conversation-view hidden" id="conversationView">
+            <div class="user-message" id="userMessage"></div>
+            <article class="run-card" id="runCard">
+              <div class="run-card-header"><div class="agent-icon">✦</div><div><strong>问数正在分析</strong><small id="runStatus">准备中</small></div><button id="cancelButton" class="cancel-button">停止</button></div>
+              <div class="step-list" id="stepList"></div>
+            </article>
+            <section class="result-view hidden" id="resultView">
+              <div class="result-actions" aria-label="结果操作">
+                <button id="saveAnalysisButton" class="result-action primary">☆ 保存分析</button>
+                <button id="addDashboardButton" class="result-action">▦ 添加到仪表盘</button>
+                <button id="downloadCsvButton" class="result-action">↓ 下载 CSV</button>
+                <button id="downloadExcelButton" class="result-action">↓ 下载 Excel</button>
+              </div>
+              <article class="answer-card"><span class="section-kicker">分析结论</span><h2 id="answerTitle">分析完成</h2><div id="answerText"></div><div class="scope-line" id="scopeLine"></div></article>
+              <div class="insight-grid" id="insightGrid"></div>
+              <section class="drill-panel hidden" id="drillPanel"><div><span class="section-kicker">DRILL ANALYSIS</span><h3>继续钻取</h3></div><div class="drill-actions" id="drillActions"></div></section>
+              <article class="panel chart-panel hidden" id="chartPanel"><div class="panel-heading"><div><span class="section-kicker">VISUALIZATION</span><h3 id="chartTitle">数据趋势</h3></div><div class="legend" id="chartLegend"></div></div><canvas id="chartCanvas" height="300"></canvas></article>
+              <article class="panel table-panel"><div class="panel-heading"><div><span class="section-kicker">RAW DATA</span><h3>数据明细</h3></div><span class="row-count" id="rowCount"></span></div><div class="table-scroll"><table id="resultTable"></table></div></article>
+              <details class="sql-panel"><summary><span><b>SQL</b> 查看生成的查询</span><span id="sqlMeta"></span></summary><div class="sql-code"><button id="copySql">复制</button><pre><code id="sqlCode"></code></pre></div></details>
+              <div class="followups" id="followups"></div>
+            </section>
+          </div>
+        </section>
+
+        <footer class="composer-wrap" id="composerWrap">
+          <form class="composer" id="chatForm">
+            <textarea id="queryInput" rows="1" placeholder="询问数据，例如：最近30天销售额趋势如何？" maxlength="4000"></textarea>
+            <div class="composer-bottom"><div class="composer-options"><span class="composer-hint">只读查询 · SQL 安全校验</span><span class="composer-hint hidden" id="quotaHint"></span><label class="chart-option"><input type="checkbox" id="generateChart" /> 生成图表</label></div><button type="submit" id="sendButton" aria-label="发送">↑</button></div>
+          </form>
+          <p class="disclaimer">AI 可能会产生错误，重要决策请核对原始数据。</p>
+        </footer>
+      </main>
+    </div>
+    <script src="./preview-bootstrap.js" defer></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

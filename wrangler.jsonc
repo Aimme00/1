@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "askdata-agent-demo",
+  "pages_build_output_dir": "./web",
+  "compatibility_date": "2026-08-09",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "askdata-agent-demo"
+    }
+  ],
+  "vars": {
+    "DASHSCOPE_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "DASHSCOPE_MODEL": "qwen-plus",
+    "ASKDATA_GUEST_QUERY_LIMIT": "2"
+  }
+}

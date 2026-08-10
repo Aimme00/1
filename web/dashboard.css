@@ -1,0 +1,257 @@
+.dashboard-nav-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin: -14px 0 22px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  color: #aeb6c5;
+  background: transparent;
+  text-align: left;
+  font: 13px inherit;
+  cursor: pointer;
+}
+
+.dashboard-nav-button:hover {
+  color: #fff;
+  background: #20293a;
+}
+
+.dashboard-nav-button span {
+  color: #8494ff;
+  font-size: 17px;
+}
+
+.dashboard-nav-button b {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 10px;
+  color: #cbd2ff;
+  background: #303b59;
+  font-size: 10px;
+}
+
+.dashboard-view {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.dashboard-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.dashboard-heading h2 {
+  margin: 7px 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 30px;
+  font-weight: 500;
+}
+
+.dashboard-heading p:last-child {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dashboard-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.dashboard-card-head,
+.dashboard-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-card-remove {
+  width: 27px;
+  height: 27px;
+  border: 0;
+  border-radius: 8px;
+  color: #8b93a1;
+  background: #f4f5f7;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.dashboard-card-remove:hover {
+  color: #bd3f4b;
+  background: #fff0f1;
+}
+
+.dashboard-card h3 {
+  margin: 11px 0 8px;
+  font-size: 16px;
+}
+
+.dashboard-card-answer {
+  min-height: 48px;
+  margin: 0 0 14px;
+  color: #596273;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.dashboard-card-body {
+  min-height: 100px;
+  padding: 13px;
+  border-radius: 12px;
+  background: #f7f8fa;
+}
+
+.dashboard-card-body canvas {
+  width: 100%;
+  height: 190px;
+}
+
+.dashboard-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+}
+
+.dashboard-kpi + .dashboard-kpi {
+  border-top: 1px solid #e5e8ee;
+}
+
+.dashboard-kpi strong {
+  font-size: 14px;
+}
+
+.dashboard-kpi span {
+  color: #70798a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dashboard-card-foot {
+  margin-top: 14px;
+}
+
+.dashboard-card-foot span {
+  color: #9aa1ad;
+  font-size: 10px;
+}
+
+.dashboard-empty {
+  padding: 80px 20px;
+  border: 1px dashed #d5d9e2;
+  border-radius: 18px;
+  color: #788194;
+  background: #fff;
+  text-align: center;
+}
+
+.dashboard-empty > span {
+  color: #6478eb;
+  font-size: 38px;
+}
+
+.dashboard-empty h3 {
+  margin: 15px 0 7px;
+  color: #384258;
+}
+
+.dashboard-empty p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.drill-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 20px;
+  border: 1px solid #dde2ff;
+  border-radius: 14px;
+  background: #f4f6ff;
+}
+
+.drill-panel h3 {
+  margin: 5px 0 0;
+  font-size: 15px;
+}
+
+.drill-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drill-action {
+  padding: 8px 12px;
+  border: 1px solid #cbd3fb;
+  border-radius: 9px;
+  color: #465bd2;
+  background: #fff;
+  font: 12px inherit;
+  cursor: pointer;
+}
+
+.drill-action:hover {
+  border-color: #6679e4;
+  background: #eef1ff;
+}
+
+.drill-direction {
+  margin-right: 5px;
+  font-weight: 700;
+}
+
+.preview-mode-badge {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100;
+  padding: 9px 13px;
+  border: 1px solid #cbd3fb;
+  border-radius: 999px;
+  color: #4055c5;
+  background: rgba(245, 247, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(45, 61, 132, 0.16);
+  font-size: 11px;
+}
+
+@media (max-width: 800px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-heading {
+    flex-direction: column;
+  }
+
+  .drill-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .drill-actions {
+    justify-content: flex-start;
+  }
+}

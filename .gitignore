@@ -1,0 +1,16 @@
+.DS_Store
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+.env.*
+!.env.example
+.venv/
+node_modules/
+.wrangler/
+_worker.bundle
+runtime_data/
+schema_index_demo.db
+__pycache__/
+*.py[cod]
+*.egg-info/

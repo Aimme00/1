@@ -1,0 +1,19 @@
+{
+  "orders": {
+    "description": "订单事实表，每行代表一笔业务订单",
+    "aliases": ["订单", "销售订单"],
+    "columns": {
+      "order_date": {
+        "description": "订单创建日期",
+        "aliases": ["下单日期", "销售日期"],
+        "semantic_role": "time"
+      },
+      "total_amount": {
+        "description": "订单含税总金额",
+        "aliases": ["销售额", "订单金额"],
+        "semantic_role": "metric",
+        "business_usage": "用于销售趋势、区域贡献和产品排名分析"
+      }
+    }
+  }
+}
