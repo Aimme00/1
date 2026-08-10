@@ -6,13 +6,13 @@
   "d1_databases": [
     {
       "binding": "DB",
-     "database_name": "askdata-agent-demo",
-"database_id": "42655358-3d8c-404c-89e2-843e451fa1e8"
+      "database_name": "askdata-agent-demo",
+      "database_id": "42655358-3d8c-404c-89e2-843e451fa1e8"
     }
   ],
   "vars": {
-    "DASHSCOPE_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "DASHSCOPE_MODEL": "qwen-plus",
+    "MODEL_BASE_URL": "https://api.deepseek.com",
+    "MODEL_NAME": "deepseek-v4-flash",
     "ASKDATA_GUEST_QUERY_LIMIT": "2"
   }
 }

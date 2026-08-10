@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSupportedQuery, fallbackSql, toCsv, validateSql } from '../functions/api/[[path]].js';
+import { assertSupportedQuery, buildModelRequest, fallbackSql, toCsv, validateSql } from '../functions/api/[[path]].js';
 
 test('fallback SQL covers the main demo intents', () => {
   assert.match(fallbackSql('各区域订单排名'), /regions/i);
@@ -48,4 +48,26 @@ test('CSV export neutralizes spreadsheet formulas without changing numbers', () 
   assert.match(csv, /"'@SUM/);
   assert.match(csv, /"'-3\+4"/);
   assert.match(csv, /"-2"/);
+});
+
+test('DeepSeek uses the current OpenAI-compatible endpoint in non-thinking mode', () => {
+  const request = buildModelRequest({
+    MODEL_API_KEY: 'test-key',
+    MODEL_BASE_URL: 'https://api.deepseek.com',
+    MODEL_NAME: 'deepseek-v4-flash',
+  }, '各区域销售额排名');
+  assert.equal(request.apiKey, 'test-key');
+  assert.equal(request.url, 'https://api.deepseek.com/chat/completions');
+  assert.equal(request.body.model, 'deepseek-v4-flash');
+  assert.deepEqual(request.body.thinking, { type: 'disabled' });
+});
+
+test('legacy secret name remains compatible during provider migration', () => {
+  const request = buildModelRequest({
+    DASHSCOPE_API_KEY: 'legacy-key',
+    MODEL_BASE_URL: 'https://api.deepseek.com/',
+    MODEL_NAME: 'deepseek-v4-flash',
+  }, '销售趋势');
+  assert.equal(request.apiKey, 'legacy-key');
+  assert.equal(request.url, 'https://api.deepseek.com/chat/completions');
 });

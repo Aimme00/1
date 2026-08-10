@@ -225,29 +225,44 @@ function extractJsonObject(text) {
   return JSON.parse(cleaned.slice(start, end + 1));
 }
 
+function modelApiKey(env) {
+  return env.MODEL_API_KEY || env.DASHSCOPE_API_KEY || '';
+}
+
+export function buildModelRequest(env, query) {
+  const apiKey = modelApiKey(env);
+  const baseUrl = String(env.MODEL_BASE_URL || env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1').replace(/\/$/, '');
+  const model = String(env.MODEL_NAME || env.DASHSCOPE_MODEL || 'qwen-plus');
+  const body = {
+    model,
+    temperature: 0,
+    messages: [
+      {
+        role: 'system',
+        content: `你是只读数据分析 Agent 的 SQL 生成节点。${SCHEMA_PROMPT}\n仅输出 JSON：{"sql":"一条 SQLite SELECT 查询，不要分号","title":"短标题"}。不得使用写操作、PRAGMA、系统表或未列出的表；默认最多返回 500 行。`,
+      },
+      { role: 'user', content: query },
+    ],
+  };
+  if (/api\.deepseek\.com/i.test(baseUrl) || /^deepseek-v4-/i.test(model)) {
+    body.thinking = { type: 'disabled' };
+  }
+  return { apiKey, url: `${baseUrl}/chat/completions`, body };
+}
+
 async function generateSqlPlan(env, query) {
   assertSupportedQuery(query);
-  if (!env.DASHSCOPE_API_KEY) {
+  const modelRequest = buildModelRequest(env, query);
+  if (!modelRequest.apiKey) {
     return { sql: fallbackSql(query), title: safeTitle(query), modelUsed: false, warning: '未配置模型 API Key，当前使用内置规则生成 SQL。' };
   }
-  const baseUrl = String(env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1').replace(/\/$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
+    const response = await fetch(modelRequest.url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${env.DASHSCOPE_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: env.DASHSCOPE_MODEL || 'qwen-plus',
-        temperature: 0,
-        messages: [
-          {
-            role: 'system',
-            content: `你是只读数据分析 Agent 的 SQL 生成节点。${SCHEMA_PROMPT}\n仅输出 JSON：{"sql":"一条 SQLite SELECT 查询，不要分号","title":"短标题"}。不得使用写操作、PRAGMA、系统表或未列出的表；默认最多返回 500 行。`,
-          },
-          { role: 'user', content: query },
-        ],
-      }),
+      headers: { Authorization: `Bearer ${modelRequest.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(modelRequest.body),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`模型接口返回 ${response.status}`);
@@ -495,7 +510,7 @@ async function handleApi(context) {
   const identity = identityFor(request);
 
   if (method === 'OPTIONS') return noContent(identity, { Allow: 'GET,POST,DELETE,OPTIONS' });
-  if (path === '/api/health') return json({ ok: true, runtime: 'cloudflare-pages-functions', database_bound: Boolean(env.DB), model_configured: Boolean(env.DASHSCOPE_API_KEY) }, 200, identity);
+  if (path === '/api/health') return json({ ok: true, runtime: 'cloudflare-pages-functions', database_bound: Boolean(env.DB), model_configured: Boolean(modelApiKey(env)) }, 200, identity);
   if (path === '/api/auth/me' || path === '/api/auth/login') {
     return json({ user: { id: identity.id, email: 'guest@askdata.demo', display_name: 'Demo Guest', is_active: true, is_admin: false, is_guest: true, created_at: Math.floor(Date.now() / 1000) } }, 200, identity);
   }
@@ -509,7 +524,7 @@ async function handleApi(context) {
   if (path === '/api/data-source/status' || path === '/api/data-source/test' || path === '/api/data-source/sync') {
     const count = await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('regions','categories','customers','products','orders','order_items')`).first('count');
     const quota = await queryQuotaStatus(env, request, identity.id);
-    return json({ database: 'AskData Demo', alias: 'Cloudflare D1', database_type: 'sqlite', ready: Number(count) === 6, table_count: Number(count), column_count: 27, readonly: true, model_configured: Boolean(env.DASHSCOPE_API_KEY), query_limit: quota.limit, query_remaining: quota.remaining, quota_scope: quota.scope }, 200, identity);
+    return json({ database: 'AskData Demo', alias: 'Cloudflare D1', database_type: 'sqlite', ready: Number(count) === 6, table_count: Number(count), column_count: 27, readonly: true, model_configured: Boolean(modelApiKey(env)), query_limit: quota.limit, query_remaining: quota.remaining, quota_scope: quota.scope }, 200, identity);
   }
 
   if (path === '/api/chat' && method === 'POST') {
