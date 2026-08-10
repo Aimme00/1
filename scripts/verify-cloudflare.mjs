@@ -18,7 +18,7 @@ const app = await readFile('web/app.js', 'utf8');
 for (const asset of ['./styles.css', './dashboard.css', './preview-bootstrap.js', './app.js']) {
   if (!html.includes(asset)) throw new Error(`index.html 缺少资源：${asset}`);
 }
-if (!html.includes('downloadChartButton') || !app.includes('function downloadChart')) {
+if (!html.includes('downloadChartButton') || !app.includes('function downloadChart') || !app.includes("toDataURL('image/png')")) {
   throw new Error('前端必须支持下载图表 PNG');
 }
 const routes = JSON.parse(await readFile('web/_routes.json', 'utf8'));
