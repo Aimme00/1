@@ -27,6 +27,13 @@ if (!html.includes('app.js?v=') || !html.includes('styles.css?v=')) {
 if (!app.includes('function niceAxisMax') || !app.includes('formatChartNumber(v)')) {
   throw new Error('图表必须使用独立纵轴上限并在柱顶显示真实值');
 }
+if (!html.includes('testerModeButton') || !app.includes('askdata_test_token') || !app.includes('X-AskData-Test-Token')) {
+  throw new Error('前端必须提供受测试码保护的不限次数测试模式');
+}
+const worker = await readFile('functions/api/[[path]].js', 'utf8');
+if (!worker.includes('ASKDATA_TEST_TOKEN') || !worker.includes('testerAuthorized')) {
+  throw new Error('后端必须验证测试码，不能直接取消公开访客限额');
+}
 const routes = JSON.parse(await readFile('web/_routes.json', 'utf8'));
 if (!routes.include?.includes('/api/*')) throw new Error('_routes.json 必须只让 /api/* 调用 Function');
 const wrangler = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));

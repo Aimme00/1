@@ -5,3 +5,5 @@
 .status-dot.error{background:#ef6b72;box-shadow:0 0 0 4px rgba(239,107,114,.12)}.sync-source{width:30px;height:30px;border-radius:8px;border:1px solid #344054;color:#aeb6c5;cursor:pointer}.sync-source:hover{color:#fff;border-color:#536cf5}.sync-source:disabled{opacity:.45;cursor:wait}
 
 .status-dot.warning{background:#e9a23b;box-shadow:0 0 0 4px rgba(233,162,59,.12)}
+
+.tester-mode-button{padding:7px 10px;border:1px solid #dfe3ea;border-radius:8px;color:#647087;background:#fff;font:11px inherit;cursor:pointer}.tester-mode-button:hover{border-color:#bfc8f2;color:#4159dc}.tester-mode-button.active{border-color:#b8ead9;color:#087454;background:#e8faf4}

@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="问数 AI 数据分析 Agent" />
     <title>问数 · AI 数据分析</title>
-    <link rel="stylesheet" href="./styles.css?v=20260810-chart-aligned" />
-    <link rel="stylesheet" href="./dashboard.css?v=20260810-chart-aligned" />
+    <link rel="stylesheet" href="./styles.css?v=20260810-tester-mode" />
+    <link rel="stylesheet" href="./dashboard.css?v=20260810-tester-mode" />
   </head>
   <body>
     <section class="auth-screen" id="authScreen" aria-labelledby="loginTitle">
@@ -53,7 +53,7 @@
         <header class="topbar">
           <button class="mobile-menu" id="mobileMenu" aria-label="展开菜单">☰</button>
           <div><span class="eyebrow">问数工作台</span><h1>数据洞察助手</h1></div>
-          <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="account-button" id="logoutButton" title="退出登录"><span class="avatar" id="userAvatar">DA</span><span class="account-name" id="accountName">Data Analyst</span><span class="logout-label">退出</span></button></div>
+          <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="退出登录"><span class="avatar" id="userAvatar">DA</span><span class="account-name" id="accountName">Data Analyst</span><span class="logout-label">退出</span></button></div>
         </header>
 
         <section class="chat-stage" id="chatStage">
@@ -114,6 +114,6 @@
       </main>
     </div>
     <script src="./preview-bootstrap.js" defer></script>
-    <script src="./app.js?v=20260810-chart-aligned" defer></script>
+    <script src="./app.js?v=20260810-tester-mode" defer></script>
   </body>
 </html>

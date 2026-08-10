@@ -160,7 +160,24 @@ function configuredQueryLimit(env) {
   return Number.isFinite(configured) ? Math.max(1, Math.min(Math.floor(configured), 20)) : 2;
 }
 
+export async function testerAuthorized(env, request) {
+  const expected = String(env.ASKDATA_TEST_TOKEN || '');
+  const supplied = String(request.headers.get('X-AskData-Test-Token') || '');
+  if (!expected || !supplied) return false;
+  const encoder = new TextEncoder();
+  const [expectedDigest, suppliedDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+    crypto.subtle.digest('SHA-256', encoder.encode(supplied)),
+  ]);
+  const left = new Uint8Array(expectedDigest);
+  const right = new Uint8Array(suppliedDigest);
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
 async function queryQuotaStatus(env, request, ownerId) {
+  if (await testerAuthorized(env, request)) return { limit: null, remaining: null, unlimited: true, scope: 'tester' };
   const limit = configuredQueryLimit(env);
   const usageBucket = 'lifetime';
   const quotaKey = await networkQuotaKey(env, request, ownerId);
@@ -169,6 +186,7 @@ async function queryQuotaStatus(env, request, ownerId) {
 }
 
 async function reserveQueryQuota(env, request, ownerId) {
+  if (await testerAuthorized(env, request)) return { allowed: true, limit: null, remaining: null, unlimited: true, scope: 'tester' };
   const limit = configuredQueryLimit(env);
   const usageBucket = 'lifetime';
   const quotaKey = await networkQuotaKey(env, request, ownerId);
@@ -511,7 +529,7 @@ async function handleApi(context) {
   const identity = identityFor(request);
 
   if (method === 'OPTIONS') return noContent(identity, { Allow: 'GET,POST,DELETE,OPTIONS' });
-  if (path === '/api/health') return json({ ok: true, runtime: 'cloudflare-pages-functions', database_bound: Boolean(env.DB), model_configured: Boolean(modelApiKey(env)) }, 200, identity);
+  if (path === '/api/health') return json({ ok: true, runtime: 'cloudflare-pages-functions', database_bound: Boolean(env.DB), model_configured: Boolean(modelApiKey(env)), tester_mode: await testerAuthorized(env, request) }, 200, identity);
   if (path === '/api/auth/me' || path === '/api/auth/login') {
     return json({ user: { id: identity.id, email: 'guest@askdata.demo', display_name: 'Demo Guest', is_active: true, is_admin: false, is_guest: true, created_at: Math.floor(Date.now() / 1000) } }, 200, identity);
   }
@@ -525,7 +543,7 @@ async function handleApi(context) {
   if (path === '/api/data-source/status' || path === '/api/data-source/test' || path === '/api/data-source/sync') {
     const count = await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('regions','categories','customers','products','orders','order_items')`).first('count');
     const quota = await queryQuotaStatus(env, request, identity.id);
-    return json({ database: 'AskData Demo', alias: 'Cloudflare D1', database_type: 'sqlite', ready: Number(count) === 6, table_count: Number(count), column_count: 27, readonly: true, model_configured: Boolean(modelApiKey(env)), query_limit: quota.limit, query_remaining: quota.remaining, quota_scope: quota.scope }, 200, identity);
+    return json({ database: '问数 Demo', alias: 'Cloudflare D1', database_type: 'sqlite', ready: Number(count) === 6, table_count: Number(count), column_count: 27, readonly: true, model_configured: Boolean(modelApiKey(env)), query_limit: quota.limit, query_remaining: quota.remaining, query_unlimited: Boolean(quota.unlimited), quota_scope: quota.scope }, 200, identity);
   }
 
   if (path === '/api/chat' && method === 'POST') {

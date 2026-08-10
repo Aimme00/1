@@ -402,6 +402,7 @@ POST /api/data-source/sync
 - 第一次 API 请求自动初始化演示库，不需要上传本地 SQLite 文件；
 - 百炼 API Key 通过 Cloudflare Secret `DASHSCOPE_API_KEY` 注入；
 - 每个访客网络总共只能提交 2 次问题或钻取，清除 Cookie/无痕模式不能重置，前端会提示剩余额度；
+- 项目所有者可在 Cloudflare Secret 中配置 `ASKDATA_TEST_TOKEN`，通过网页右上角“测试模式”输入测试码后不限提问次数；测试码只保存在当前浏览器标签页，公开访客仍受 2 次限制；
 - 未配置 Key 时继续使用安全规则 SQL，方便先验证部署；
 - `web/_routes.json` 让静态资源绕过 Function，仅 API 消耗 Workers 配额；
 - 本地 Python/FastAPI 版本和双击离线 Demo 保持可用。
@@ -415,6 +416,7 @@ Build command: npm run build
 Build output directory: web
 D1 binding: DB
 Secret: DASHSCOPE_API_KEY
+Optional tester secret: ASKDATA_TEST_TOKEN
 ```
 
 完整步骤见 [Cloudflare 部署指南](docs/CLOUDFLARE部署指南.md)。模型密钥只放 Cloudflare Secret 或本机 `.dev.vars`，不要提交到代码仓库。
