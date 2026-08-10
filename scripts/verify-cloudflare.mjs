@@ -21,6 +21,9 @@ for (const asset of ['./styles.css', './dashboard.css', './preview-bootstrap.js'
 if (!html.includes('downloadChartButton') || !app.includes('function downloadChart') || !app.includes("toDataURL('image/png')")) {
   throw new Error('前端必须支持下载图表 PNG');
 }
+if (!app.includes('function niceAxisMax') || !app.includes('formatChartNumber(v)')) {
+  throw new Error('图表必须使用独立纵轴上限并在柱顶显示真实值');
+}
 const routes = JSON.parse(await readFile('web/_routes.json', 'utf8'));
 if (!routes.include?.includes('/api/*')) throw new Error('_routes.json 必须只让 /api/* 调用 Function');
 const wrangler = JSON.parse(await readFile('wrangler.jsonc', 'utf8'));

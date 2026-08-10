@@ -345,17 +345,18 @@ function buildAnswer(columns, rows) {
   return `查询已完成，共返回 ${rows.length} 行数据。你可以查看数据表和生成的只读 SQL。`;
 }
 
-function buildChart(columns, rows, query, requested) {
+export function buildChart(columns, rows, query, requested) {
   if (!(requested || CHART_INTENT.test(query)) || rows.length === 0 || columns.length < 2) return [];
   const metricIndex = columns.findIndex((column, index) => index > 0 && rows.some(row => numberValue(row[index]) !== null));
   if (metricIndex < 1) return [];
   const timeSeries = /(date|day|month|year|time|日期|月份)/i.test(columns[0]);
+  const chartData = rows.slice(0, 30).map(row => ({ name: String(row[0]), value: numberValue(row[metricIndex]) || 0 }));
   return [{
     title: timeSeries ? '数据趋势' : '数据对比',
     option: {
-      xAxis: { type: 'category', data: rows.slice(0, 30).map(row => row[0]) },
+      xAxis: { type: 'category', data: chartData.map(item => item.name) },
       yAxis: { type: 'value' },
-      series: [{ type: timeSeries ? 'line' : 'bar', data: rows.slice(0, 30).map(row => numberValue(row[metricIndex]) || 0) }],
+      series: [{ type: timeSeries ? 'line' : 'bar', data: chartData }],
     },
   }];
 }

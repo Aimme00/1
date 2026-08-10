@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSupportedQuery, buildModelRequest, fallbackSql, toCsv, validateSql } from '../functions/api/[[path]].js';
+import { assertSupportedQuery, buildChart, buildModelRequest, fallbackSql, toCsv, validateSql } from '../functions/api/[[path]].js';
 
 test('fallback SQL covers the main demo intents', () => {
   assert.match(fallbackSql('各区域订单排名'), /regions/i);
@@ -70,4 +70,17 @@ test('legacy secret name remains compatible during provider migration', () => {
   }, '销售趋势');
   assert.equal(request.apiKey, 'legacy-key');
   assert.equal(request.url, 'https://api.deepseek.com/chat/completions');
+});
+
+test('chart keeps each category bundled with its own numeric value', () => {
+  const [chart] = buildChart(
+    ['region', 'sales_amount'],
+    [['华南', 165359], ['华北', 170158]],
+    '区域销售额柱状图',
+    true,
+  );
+  assert.deepEqual(chart.option.series[0].data, [
+    { name: '华南', value: 165359 },
+    { name: '华北', value: 170158 },
+  ]);
 });
