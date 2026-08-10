@@ -1,0 +1,25 @@
+name: Bootstrap project upload
+
+on:
+  push:
+    branches: [main]
+    paths: [project.tar.gz]
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import project archive
+        if: ${{ hashFiles('project.tar.gz') != '' }}
+        run: |
+          tar -xzf project.tar.gz
+          rm project.tar.gz
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "Import 问数 project"
+          git push
