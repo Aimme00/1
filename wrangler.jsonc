@@ -6,7 +6,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "askdata-agent-demo"
+     "database_name": "askdata-agent-demo",
+"database_id": "42655358-3d8c-404c-89e2-843e451fa1e8"
     }
   ],
   "vars": {
