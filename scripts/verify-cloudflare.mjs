@@ -21,6 +21,9 @@ for (const asset of ['./styles.css', './dashboard.css', './preview-bootstrap.js'
 if (!html.includes('downloadChartButton') || !app.includes('function downloadChart') || !app.includes("toDataURL('image/png')")) {
   throw new Error('前端必须支持下载图表 PNG');
 }
+if (!html.includes('app.js?v=') || !html.includes('styles.css?v=')) {
+  throw new Error('前端静态资源必须带版本标识，避免浏览器继续使用旧图表脚本');
+}
 if (!app.includes('function niceAxisMax') || !app.includes('formatChartNumber(v)')) {
   throw new Error('图表必须使用独立纵轴上限并在柱顶显示真实值');
 }
