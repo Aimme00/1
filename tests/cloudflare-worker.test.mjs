@@ -8,6 +8,14 @@ test('fallback SQL covers the main demo intents', () => {
   assert.match(fallbackSql('最近30天趋势'), /order_date/i);
 });
 
+test('regional top products use an outer query to filter window rankings', () => {
+  const sql = fallbackSql('最近30天各区域销售额排名前3的产品');
+  assert.match(sql, /ROW_NUMBER\(\) OVER/i);
+  assert.match(sql, /FROM ranked\s+WHERE region_rank<=3/i);
+  assert.doesNotMatch(sql, /WHERE[^)]*ROW_NUMBER/i);
+  assert.equal(validateSql(sql).endsWith('LIMIT 500'), true);
+});
+
 test('validator accepts read-only business SQL and enforces limit', () => {
   const sql = validateSql('SELECT region_name FROM regions');
   assert.match(sql, /LIMIT 500$/);
@@ -60,6 +68,8 @@ test('DeepSeek uses the current OpenAI-compatible endpoint in non-thinking mode'
   assert.equal(request.url, 'https://api.deepseek.com/chat/completions');
   assert.equal(request.body.model, 'deepseek-v4-flash');
   assert.deepEqual(request.body.thinking, { type: 'disabled' });
+  assert.match(request.body.messages[0].content, /order_status='completed'/);
+  assert.match(request.body.messages[0].content, /CTE 或子查询/);
 });
 
 test('legacy secret name remains compatible during provider migration', () => {

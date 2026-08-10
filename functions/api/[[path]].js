@@ -14,7 +14,7 @@ SQLite / Cloudflare D1 数据库，只允许查询以下业务表：
 - categories(category_id INTEGER, category_name TEXT)
 - customers(customer_id INTEGER, customer_name TEXT, region_id INTEGER)
 - products(product_id INTEGER, product_name TEXT, category_id INTEGER, unit_price REAL)
-- orders(order_id INTEGER, customer_id INTEGER, order_date TEXT, order_status TEXT, sales_amount REAL)
+- orders(order_id INTEGER, customer_id INTEGER, order_date TEXT, order_status TEXT, sales_amount REAL)，其中 order_status 只有 completed（已完成）和 cancelled（已取消）
 - order_items(order_item_id INTEGER, order_id INTEGER, product_id INTEGER, quantity INTEGER, unit_price REAL, line_amount REAL)
 关系：customers.region_id=regions.region_id；orders.customer_id=customers.customer_id；order_items.order_id=orders.order_id；order_items.product_id=products.product_id；products.category_id=categories.category_id。
 `;
@@ -202,6 +202,31 @@ export function fallbackSql(query) {
   if (region && /产品|商品/.test(query)) {
     return `SELECT p.product_name, ROUND(SUM(oi.line_amount),2) AS sales_amount, SUM(oi.quantity) AS quantity FROM order_items oi JOIN products p ON oi.product_id=p.product_id JOIN orders o ON oi.order_id=o.order_id JOIN customers c ON o.customer_id=c.customer_id JOIN regions r ON c.region_id=r.region_id WHERE o.order_status='completed' AND r.region_name='${region}' GROUP BY p.product_id,p.product_name ORDER BY sales_amount DESC LIMIT 10`;
   }
+  if (/区域|地区/.test(query) && /产品|商品/.test(query) && /前\s*3|top\s*3|排名/i.test(query)) {
+    return `WITH product_sales AS (
+      SELECT r.region_name AS region, p.product_name,
+             ROUND(SUM(oi.line_amount),2) AS product_sales,
+             SUM(oi.quantity) AS sales_quantity,
+             COUNT(DISTINCT o.order_id) AS order_count
+      FROM order_items oi
+      JOIN orders o ON oi.order_id=o.order_id
+      JOIN products p ON oi.product_id=p.product_id
+      JOIN customers cu ON o.customer_id=cu.customer_id
+      JOIN regions r ON cu.region_id=r.region_id
+      WHERE o.order_status='completed' AND o.order_date>=date('now','-29 day')
+      GROUP BY r.region_id,r.region_name,p.product_id,p.product_name
+    ), ranked AS (
+      SELECT product_sales.*,
+             ROUND(SUM(product_sales) OVER (PARTITION BY region),2) AS region_sales,
+             ROW_NUMBER() OVER (PARTITION BY region ORDER BY product_sales DESC,product_name ASC) AS region_rank
+      FROM product_sales
+    )
+    SELECT region,product_name,product_sales,sales_quantity,order_count,region_sales,
+           ROUND(product_sales*100.0/NULLIF(region_sales,0),2) AS sales_share_pct,region_rank
+    FROM ranked
+    WHERE region_rank<=3
+    ORDER BY region_sales DESC,region_rank ASC`;
+  }
   if (/区域/.test(query)) {
     return `SELECT r.region_name AS region, COUNT(DISTINCT o.order_id) AS order_count, ROUND(SUM(o.sales_amount),2) AS sales_amount FROM orders o JOIN customers c ON o.customer_id=c.customer_id JOIN regions r ON c.region_id=r.region_id WHERE o.order_status='completed' GROUP BY r.region_id,r.region_name ORDER BY sales_amount DESC`;
   }
@@ -257,7 +282,7 @@ export function buildModelRequest(env, query) {
     messages: [
       {
         role: 'system',
-        content: `你是只读数据分析 Agent 的 SQL 生成节点。${SCHEMA_PROMPT}\n仅输出 JSON：{"sql":"一条 SQLite SELECT 查询，不要分号","title":"短标题"}。不得使用写操作、PRAGMA、系统表或未列出的表；默认最多返回 500 行。`,
+        content: `你是只读数据分析 Agent 的 SQL 生成节点。${SCHEMA_PROMPT}\n仅输出 JSON：{"sql":"一条 SQLite SELECT 查询，不要分号","title":"短标题"}。不得使用写操作、PRAGMA、系统表或未列出的表；默认最多返回 500 行。必须遵守 SQLite 语法：不能使用 QUALIFY；不能在同一层 WHERE 或 HAVING 中引用窗口函数别名。需要筛选 ROW_NUMBER、RANK 等窗口函数结果时，必须先在 CTE 或子查询中计算，再由外层 SELECT 筛选。用户说“已完成订单”时必须使用 order_status='completed'。`,
       },
       { role: 'user', content: query },
     ],
@@ -407,7 +432,30 @@ async function executeAgent(env, query, generateChart, emit = async () => {}) {
     sql = validateSql(fallbackSql(query));
   }
   await emit('sql_validate', 'completed', 'SQL 只读安全校验通过');
-  const queryResult = await env.DB.prepare(sql).all();
+  let usedFallback = !plan.modelUsed;
+  let queryResult;
+  try {
+    queryResult = await env.DB.prepare(sql).all();
+  } catch (error) {
+    if (!plan.modelUsed) throw error;
+    warnings.push(`模型 SQL 与 SQLite 不兼容，已自动改用安全规则修复：${error.message}`);
+    sql = validateSql(fallbackSql(query));
+    usedFallback = true;
+    await emit('sql_validate', 'completed', '已自动修复 SQLite 兼容性问题');
+    queryResult = await env.DB.prepare(sql).all();
+  }
+  if (plan.modelUsed && !usedFallback && !(queryResult.results || []).length) {
+    const fallback = validateSql(fallbackSql(query));
+    if (fallback !== sql) {
+      const checked = await env.DB.prepare(fallback).all();
+      if ((checked.results || []).length) {
+        warnings.push('模型 SQL 返回 0 行，已使用安全规则复核并修正筛选条件。');
+        sql = fallback;
+        queryResult = checked;
+        usedFallback = true;
+      }
+    }
+  }
   const objects = queryResult.results || [];
   const columns = objects.length ? Object.keys(objects[0]) : [];
   const rows = objects.map(row => columns.map(column => row[column]));
@@ -428,7 +476,7 @@ async function executeAgent(env, query, generateChart, emit = async () => {}) {
       row_count: rows.length,
       truncated: rows.length >= MAX_RESULT_ROWS,
       chart_requested: generateChart === true || CHART_INTENT.test(query),
-      model_used: plan.modelUsed,
+      model_used: plan.modelUsed && !usedFallback,
       drill_actions: buildDrillActions(columns, rows),
     },
     warnings,
