@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/verify-cloudflare.mjs",
-    "test:worker": "node --test tests/cloudflare-worker.test.mjs",
+    "test:worker": "node --test tests/cloudflare-worker.test.mjs tests/offline-sqlite-integration.test.mjs tests/chart-renderer.test.mjs tests/downloads.test.mjs",
     "dev:cloudflare": "wrangler pages dev",
     "deploy:cloudflare": "wrangler pages deploy"
   },
@@ -13,4 +13,3 @@
     "wrangler": "^4.45.0"
   }
 }
-

@@ -3,8 +3,9 @@ const MAX_QUERY_LENGTH = 2000;
 const MAX_RESULT_ROWS = 500;
 const SQL_TABLES = new Set(['regions', 'categories', 'customers', 'products', 'orders', 'order_items']);
 const CHART_INTENT = /图表|趋势图|折线图|柱状图|饼图|可视化|画图|生成图片|生成图像/i;
-const SUPPORTED_QUERY_TOPIC = /销售额|销售|订单量|订单数|订单|产品|商品|品类|类别|分类|区域|地区|趋势|环比|月度|按月|月份|异常|峰值/i;
-const UNSUPPORTED_QUERY_TOPIC = /退款|退货|渠道|手机号|电话|身份证|邮箱|密码|住址|利率/i;
+const SUPPORTED_QUERY_TOPIC = /销售额|销售|订单量|订单数|订单|产品|商品|品类|类别|分类|区域|地区|趋势|环比|对比|占比|比例|贡献|分布|月度|按月|月份/i;
+const UNSUPPORTED_QUERY_TOPIC = /退款|退货|渠道|手机号|电话|身份证|邮箱|密码|住址|利率|同比/i;
+const NON_DESCRIPTIVE_QUERY_TOPIC = /异常|峰值|原因|为什么|为何|归因|诊断|预测|预估|未来|建议|策略|怎么办|如何提升|如何降低/i;
 const WRITE_QUERY_INTENT = /删除|删掉|清空|修改|更新|写入|插入|新增|导入|drop|delete|update|insert/i;
 const DANGEROUS_SQL_FUNCTION = /\b(?:benchmark|load_file|pg_sleep|randomblob|readfile|sleep|sys_eval|sys_exec|writefile|zeroblob)\s*\(/i;
 
@@ -227,6 +228,45 @@ export function fallbackSql(query) {
     WHERE region_rank<=3
     ORDER BY region_sales DESC,region_rank ASC`;
   }
+  if (/占比|比例|贡献/.test(query) && /区域|地区/.test(query)) {
+    return `WITH grouped AS (
+      SELECT r.region_name AS region, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(DISTINCT o.order_id) AS order_count
+      FROM orders o JOIN customers cu ON o.customer_id=cu.customer_id JOIN regions r ON cu.region_id=r.region_id
+      WHERE o.order_status='completed' GROUP BY r.region_id,r.region_name
+    )
+    SELECT region,sales_amount,order_count,ROUND(sales_amount*100.0/NULLIF(SUM(sales_amount) OVER (),0),2) AS sales_share_pct
+    FROM grouped ORDER BY sales_amount DESC`;
+  }
+  if (/占比|比例|贡献/.test(query) && /品类|类别|分类/.test(query)) {
+    return `WITH grouped AS (
+      SELECT c.category_name, ROUND(SUM(oi.line_amount),2) AS sales_amount, SUM(oi.quantity) AS quantity
+      FROM order_items oi JOIN products p ON oi.product_id=p.product_id JOIN categories c ON p.category_id=c.category_id JOIN orders o ON oi.order_id=o.order_id
+      WHERE o.order_status='completed' GROUP BY c.category_id,c.category_name
+    )
+    SELECT category_name,sales_amount,quantity,ROUND(sales_amount*100.0/NULLIF(SUM(sales_amount) OVER (),0),2) AS sales_share_pct
+    FROM grouped ORDER BY sales_amount DESC`;
+  }
+  if (/占比|比例|贡献/.test(query) && /产品|商品/.test(query)) {
+    return `WITH grouped AS (
+      SELECT p.product_name, ROUND(SUM(oi.line_amount),2) AS sales_amount, SUM(oi.quantity) AS quantity
+      FROM order_items oi JOIN products p ON oi.product_id=p.product_id JOIN orders o ON oi.order_id=o.order_id
+      WHERE o.order_status='completed' GROUP BY p.product_id,p.product_name
+    )
+    SELECT product_name,sales_amount,quantity,ROUND(sales_amount*100.0/NULLIF(SUM(sales_amount) OVER (),0),2) AS sales_share_pct
+    FROM grouped ORDER BY sales_amount DESC LIMIT 10`;
+  }
+  if (/分布/.test(query) && /区域|地区/.test(query)) {
+    return `SELECT r.region_name AS region, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(DISTINCT o.order_id) AS order_count FROM orders o JOIN customers cu ON o.customer_id=cu.customer_id JOIN regions r ON cu.region_id=r.region_id WHERE o.order_status='completed' GROUP BY r.region_id,r.region_name ORDER BY sales_amount DESC`;
+  }
+  if (/环比|月度|按月|月份|本月与上月|上月对比/.test(query)) {
+    return `WITH monthly AS (
+      SELECT strftime('%Y-%m',o.order_date) AS sales_month, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(*) AS order_count
+      FROM orders o WHERE o.order_status='completed' GROUP BY sales_month
+    )
+    SELECT sales_month,sales_amount,order_count,
+           ROUND((sales_amount-LAG(sales_amount) OVER (ORDER BY sales_month))*100.0/NULLIF(LAG(sales_amount) OVER (ORDER BY sales_month),0),2) AS month_over_month_pct
+    FROM monthly ORDER BY sales_month`;
+  }
   if (/区域/.test(query)) {
     return `SELECT r.region_name AS region, COUNT(DISTINCT o.order_id) AS order_count, ROUND(SUM(o.sales_amount),2) AS sales_amount FROM orders o JOIN customers c ON o.customer_id=c.customer_id JOIN regions r ON c.region_id=r.region_id WHERE o.order_status='completed' GROUP BY r.region_id,r.region_name ORDER BY sales_amount DESC`;
   }
@@ -236,13 +276,22 @@ export function fallbackSql(query) {
   if (/品类|类别|分类/.test(query)) {
     return `SELECT c.category_name, ROUND(SUM(oi.line_amount),2) AS sales_amount FROM order_items oi JOIN products p ON oi.product_id=p.product_id JOIN categories c ON p.category_id=c.category_id JOIN orders o ON oi.order_id=o.order_id WHERE o.order_status='completed' GROUP BY c.category_id,c.category_name ORDER BY sales_amount DESC`;
   }
-  if (/环比|月度|按月|月份|本月与上月|上月对比/.test(query)) {
-    return `SELECT strftime('%Y-%m',o.order_date) AS sales_month, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(*) AS order_count FROM orders o WHERE o.order_status='completed' GROUP BY sales_month ORDER BY sales_month`;
-  }
-  if (/异常|峰值/.test(query)) {
-    return `SELECT o.order_date, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(*) AS order_count FROM orders o WHERE o.order_status='completed' GROUP BY o.order_date ORDER BY sales_amount DESC LIMIT 10`;
-  }
   return `SELECT o.order_date, ROUND(SUM(o.sales_amount),2) AS sales_amount, COUNT(*) AS order_count FROM orders o WHERE o.order_status='completed' AND o.order_date>=date('now','-29 day') GROUP BY o.order_date ORDER BY o.order_date`;
+}
+
+export function isRegionalTopProductsQuery(query) {
+  return /区域|地区/.test(query) && /产品|商品/.test(query) && /前\s*3|top\s*3|排名/i.test(query);
+}
+
+export function isDeterministicDescriptiveQuery(query) {
+  return /趋势|排名|最高|最低|前\s*\d+|top\s*\d+|占比|比例|贡献|分布|环比|对比|月度|按月|月份/i.test(String(query || ''));
+}
+
+export async function planSqlQuery(env, query) {
+  if (isRegionalTopProductsQuery(query) || isDeterministicDescriptiveQuery(query)) {
+    return { sql: fallbackSql(query), title: safeTitle(query), modelUsed: false, warning: '标准描述性分析使用离线确定性 SQL，不消耗模型 API。' };
+  }
+  return generateSqlPlan(env, query);
 }
 
 export function assertSupportedQuery(query) {
@@ -250,6 +299,9 @@ export function assertSupportedQuery(query) {
   if (!normalized) throw new Error('问题不能为空。');
   if (WRITE_QUERY_INTENT.test(normalized)) {
     throw new Error('当前 Demo 仅支持只读数据分析，不能执行删除、修改或写入操作。');
+  }
+  if (NON_DESCRIPTIVE_QUERY_TOPIC.test(normalized)) {
+    throw new Error('当前 Demo 定位为描述性分析，只回答数据中“发生了什么”。暂不提供异常诊断、原因归因、预测或策略建议；你可以改问销售趋势、排名、占比、期间对比或区域分布。');
   }
   if (UNSUPPORTED_QUERY_TOPIC.test(normalized)) {
     throw new Error('当前 D1 演示库缺少回答该问题所需的字段，请改问销售额、订单、区域、商品或品类分析。');
@@ -363,39 +415,155 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 }
 
-function buildInsights(columns, rows) {
+function percentageChange(current, previous) {
+  const currentValue = numberValue(current);
+  const previousValue = numberValue(previous);
+  if (currentValue === null || previousValue === null || previousValue === 0) return null;
+  return (currentValue - previousValue) * 100 / previousValue;
+}
+
+function changeText(change) {
+  if (change === null) return '缺少可比较的基期数据';
+  if (Math.abs(change) < 0.005) return '与上一期持平';
+  return `较上一期${change > 0 ? '增长' : '下降'} ${formatNumber(Math.abs(change))}%`;
+}
+
+export function buildInsights(columns, rows, query = '') {
   if (!rows.length) return [{ title: '查询结果', text: '当前条件下没有匹配数据。' }];
+  const regionIndex = columns.findIndex(column => /^(region|region_name)$/i.test(column));
+  const productIndex = columns.findIndex(column => /^product_name$/i.test(column));
+  const productSalesIndex = columns.findIndex(column => /^(product_sales|sales_amount)$/i.test(column));
+  const rankIndex = columns.findIndex(column => /^(region_rank|rank_in_region)$/i.test(column));
+  const ratioIndex = columns.findIndex(column => /^(sales_share_pct|sales_ratio)$/i.test(column));
+  if (regionIndex >= 0 && productIndex >= 0 && productSalesIndex >= 0 && rankIndex >= 0) {
+    const leaders = rows.filter(row => Number(row[rankIndex]) === 1);
+    const top = rows.reduce((best, row) => numberValue(row[productSalesIndex]) > numberValue(best?.[productSalesIndex]) ? row : best, null);
+    const concentrated = ratioIndex >= 0 ? leaders.reduce((best, row) => numberValue(row[ratioIndex]) > numberValue(best?.[ratioIndex]) ? row : best, null) : null;
+    const ratio = concentrated ? numberValue(concentrated[ratioIndex]) : null;
+    return [
+      { title: '结果规模', text: `覆盖 ${leaders.length} 个区域，共返回 ${rows.length} 个区域产品排名。` },
+      { title: '单品最高销售额', text: `${top?.[regionIndex]}的${top?.[productIndex]}最高，为 ${formatNumber(top?.[productSalesIndex])}。` },
+      { title: '头部集中度', text: concentrated ? `${concentrated[regionIndex]}最高，第一名${concentrated[productIndex]}占区域销售额 ${formatNumber(ratio > 1 ? ratio : ratio * 100)}%。` : '当前结果未返回销售占比。' },
+    ];
+  }
+  const timeIndex = columns.findIndex(column => /(order_date|sales_date|sales_month|month|date)/i.test(column));
+  const salesIndex = columns.findIndex(column => /^(sales_amount|product_sales|revenue|total_sales)$/i.test(column));
+  const shareIndex = columns.findIndex(column => /(share|ratio|占比|比例)/i.test(column));
+  if (timeIndex >= 0 && salesIndex >= 0) {
+    const values = rows.map(row => numberValue(row[salesIndex]) || 0);
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const max = Math.max(...values);
+    const maxIndex = values.indexOf(max);
+    const change = rows.length > 1 ? percentageChange(rows.at(-1)?.[salesIndex], rows.at(-2)?.[salesIndex]) : null;
+    const monthly = /month/i.test(columns[timeIndex]) || /月度|按月|月份|本月|上月/.test(query);
+    return [
+      { title: monthly ? '对比期间' : '数据范围', text: `覆盖 ${rows[0][timeIndex]} 至 ${rows.at(-1)[timeIndex]}，共 ${rows.length} 个期间。` },
+      { title: monthly ? '最新期间销售额' : '销售额合计', text: monthly ? `${rows.at(-1)[timeIndex]}为 ${formatNumber(rows.at(-1)[salesIndex])}。` : `所选期间合计为 ${formatNumber(total)}。` },
+      { title: monthly ? '环比变化' : '最高销售日期', text: monthly ? changeText(change) : `${rows[maxIndex][timeIndex]}最高，为 ${formatNumber(max)}。` },
+    ];
+  }
+  if (shareIndex >= 0) {
+    const shares = rows.map(row => numberValue(row[shareIndex]) || 0);
+    const topTwo = shares.slice(0, 2).reduce((sum, value) => sum + value, 0);
+    return [
+      { title: '构成项数量', text: `本次共比较 ${rows.length} 个构成项。` },
+      { title: '占比最高', text: `${rows[0][0]}占比最高，为 ${formatNumber(shares[0])}%。` },
+      { title: '头部占比', text: `前两项合计占 ${formatNumber(topTwo)}%。` },
+    ];
+  }
   const numericIndexes = columns.map((column, index) => ({ column, index })).filter(({ index }) => rows.some(row => numberValue(row[index]) !== null));
   if (!numericIndexes.length) return [{ title: '结果规模', text: `共返回 ${rows.length} 行数据。` }];
   const metric = numericIndexes.find(item => !/(^id$|_id$|date|month|year)/i.test(item.column)) || numericIndexes[0];
   const values = rows.map(row => numberValue(row[metric.index])).filter(value => value !== null);
-  const total = values.reduce((sum, value) => sum + value, 0);
   const max = Math.max(...values);
+  const min = Math.min(...values);
   const maxIndex = rows.findIndex(row => numberValue(row[metric.index]) === max);
+  const minIndex = rows.findIndex(row => numberValue(row[metric.index]) === min);
   return [
-    { title: '结果规模', text: `本次查询返回 ${rows.length} 行。` },
-    { title: '指标合计', text: `${metric.column} 合计为 ${formatNumber(total)}。` },
-    { title: '最高值', text: `${rows[maxIndex]?.[0] ?? '当前结果'} 的 ${metric.column} 最高，为 ${formatNumber(max)}。` },
+    { title: '比较范围', text: `本次共比较 ${rows.length} 个对象。` },
+    { title: '最高值', text: `${rows[maxIndex]?.[0] ?? '当前结果'}最高，为 ${formatNumber(max)}。` },
+    { title: '最低值', text: `${rows[minIndex]?.[0] ?? '当前结果'}最低，为 ${formatNumber(min)}。` },
   ];
 }
 
-function buildAnswer(columns, rows) {
+export function buildAnswer(columns, rows, query = '') {
   if (!rows.length) return '当前筛选条件下没有查询到匹配数据。';
+  const regionIndex = columns.findIndex(column => /^(region|region_name)$/i.test(column));
+  const productIndex = columns.findIndex(column => /^product_name$/i.test(column));
+  const rankIndex = columns.findIndex(column => /^(region_rank|rank_in_region)$/i.test(column));
+  const ratioIndex = columns.findIndex(column => /^(sales_share_pct|sales_ratio)$/i.test(column));
+  if (regionIndex >= 0 && productIndex >= 0 && rankIndex >= 0) {
+    const leaders = rows.filter(row => Number(row[rankIndex]) === 1);
+    const concentrated = ratioIndex >= 0 ? leaders.reduce((best, row) => numberValue(row[ratioIndex]) > numberValue(best?.[ratioIndex]) ? row : best, null) : null;
+    if (concentrated) {
+      const ratio = numberValue(concentrated[ratioIndex]);
+      return `共分析 ${leaders.length} 个区域、${rows.length} 个头部产品；${concentrated[regionIndex]}的头部产品集中度最高，第一名${concentrated[productIndex]}占该区域销售额 ${formatNumber(ratio > 1 ? ratio : ratio * 100)}%。`;
+    }
+    return `共分析 ${leaders.length} 个区域、${rows.length} 个头部产品；结果已按区域总销售额和区域内排名排序。`;
+  }
+  const timeIndex = columns.findIndex(column => /(order_date|sales_date|sales_month|month|date)/i.test(column));
+  const salesIndex = columns.findIndex(column => /^(sales_amount|product_sales|revenue|total_sales)$/i.test(column));
+  const shareIndex = columns.findIndex(column => /(share|ratio|占比|比例)/i.test(column));
+  if (timeIndex >= 0 && salesIndex >= 0) {
+    const monthly = /month/i.test(columns[timeIndex]) || /月度|按月|月份|本月|上月/.test(query);
+    if (monthly && rows.length > 1) {
+      const latest = rows.at(-1);
+      const previous = rows.at(-2);
+      const change = percentageChange(latest[salesIndex], previous[salesIndex]);
+      return `${latest[timeIndex]}销售额为 ${formatNumber(latest[salesIndex])}，${changeText(change)}；上一期 ${previous[timeIndex]}为 ${formatNumber(previous[salesIndex])}。`;
+    }
+    const values = rows.map(row => numberValue(row[salesIndex]) || 0);
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const max = Math.max(...values);
+    const maxIndex = values.indexOf(max);
+    const rangeChange = rows.length > 1 ? percentageChange(rows.at(-1)[salesIndex], rows[0][salesIndex]) : null;
+    return `所选期间共覆盖 ${rows.length} 个有成交日期，销售额合计 ${formatNumber(total)}；期末${changeText(rangeChange).replace('上一期', '期初')}，销售额最高日期为 ${rows[maxIndex][timeIndex]}（${formatNumber(max)}）。`;
+  }
+  if (shareIndex >= 0) {
+    const topShare = numberValue(rows[0][shareIndex]) || 0;
+    return `本次共比较 ${rows.length} 个构成项；${rows[0][0]}占比最高，为 ${formatNumber(topShare)}%。详细构成可在数据表中查看。`;
+  }
   const metricIndex = columns.findIndex(column => /(sales|amount|count|quantity|total|revenue)/i.test(column));
   if (metricIndex > 0) {
-    return `${rows[0][0]} 当前排名第一，${columns[metricIndex]} 为 ${formatNumber(rows[0][metricIndex])}；本次共比较 ${rows.length} 组数据。`;
+    const values = rows.map(row => numberValue(row[metricIndex]));
+    const max = Math.max(...values.filter(value => value !== null));
+    const min = Math.min(...values.filter(value => value !== null));
+    const maxIndex = values.indexOf(max);
+    const minIndex = values.indexOf(min);
+    return `本次共比较 ${rows.length} 个对象；${rows[maxIndex][0]}最高，为 ${formatNumber(max)}，${rows[minIndex][0]}最低，为 ${formatNumber(min)}。`;
   }
   return `查询已完成，共返回 ${rows.length} 行数据。你可以查看数据表和生成的只读 SQL。`;
 }
 
 export function buildChart(columns, rows, query, requested) {
   if (!(requested || CHART_INTENT.test(query)) || rows.length === 0 || columns.length < 2) return [];
-  const metricIndex = columns.findIndex((column, index) => index > 0 && rows.some(row => numberValue(row[index]) !== null));
+  const regionIndex = columns.findIndex(column => /^(region|region_name)$/i.test(column));
+  const productIndex = columns.findIndex(column => /^product_name$/i.test(column));
+  const productSalesIndex = columns.findIndex(column => /^(product_sales|sales_amount)$/i.test(column));
+  if (regionIndex >= 0 && productIndex >= 0 && productSalesIndex >= 0) {
+    const chartData = rows.slice(0, 30).map(row => ({
+      name: `${row[regionIndex]} · ${row[productIndex]}`,
+      value: numberValue(row[productSalesIndex]) || 0,
+    }));
+    return [{
+      title: '各区域 Top 3 产品销售额',
+      option: {
+        orientation: 'horizontal',
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: chartData.map(item => item.name) },
+        series: [{ type: 'bar', data: chartData }],
+      },
+    }];
+  }
+  const shareIndex = columns.findIndex(column => /(share|ratio|占比|比例)/i.test(column));
+  const metricIndex = /占比|比例|贡献/.test(query) && shareIndex > 0
+    ? shareIndex
+    : columns.findIndex((column, index) => index > 0 && rows.some(row => numberValue(row[index]) !== null));
   if (metricIndex < 1) return [];
   const timeSeries = /(date|day|month|year|time|日期|月份)/i.test(columns[0]);
   const chartData = rows.slice(0, 30).map(row => ({ name: String(row[0]), value: numberValue(row[metricIndex]) || 0 }));
   return [{
-    title: timeSeries ? '数据趋势' : '数据对比',
+    title: timeSeries ? '数据趋势' : (/占比|比例|贡献/.test(query) ? '销售额占比' : '数据对比'),
     option: {
       xAxis: { type: 'category', data: chartData.map(item => item.name) },
       yAxis: { type: 'value' },
@@ -420,19 +588,27 @@ async function executeAgent(env, query, generateChart, emit = async () => {}) {
   await emit('intent', 'completed', '已识别数据查询意图');
   await emit('schema', 'completed', '已检索 6 张业务表及字段关系');
   await emit('plan', 'completed', '分析计划已生成');
-  const plan = await generateSqlPlan(env, query);
+  const deterministicQuery = isRegionalTopProductsQuery(query);
+  const plan = await planSqlQuery(env, query);
   await emit('sql_generate', 'completed', plan.modelUsed ? '模型已生成 SQL' : '规则节点已生成 SQL');
   let sql;
+  let usedFallback = !plan.modelUsed;
   const warnings = [];
   if (plan.warning) warnings.push(plan.warning);
-  try {
-    sql = validateSql(plan.sql);
-  } catch (error) {
-    warnings.push(`模型 SQL 校验未通过，已自动修复：${error.message}`);
+  if (deterministicQuery) {
     sql = validateSql(fallbackSql(query));
+    usedFallback = true;
+    if (plan.modelUsed) warnings.push('区域 Top 3 属于复合分析，已使用经过校验的确定性 SQL，确保区域总额、占比和排名口径一致。');
+  } else {
+    try {
+      sql = validateSql(plan.sql);
+    } catch (error) {
+      warnings.push(`模型 SQL 校验未通过，已自动修复：${error.message}`);
+      sql = validateSql(fallbackSql(query));
+      usedFallback = true;
+    }
   }
   await emit('sql_validate', 'completed', 'SQL 只读安全校验通过');
-  let usedFallback = !plan.modelUsed;
   let queryResult;
   try {
     queryResult = await env.DB.prepare(sql).all();
@@ -460,19 +636,19 @@ async function executeAgent(env, query, generateChart, emit = async () => {}) {
   const columns = objects.length ? Object.keys(objects[0]) : [];
   const rows = objects.map(row => columns.map(column => row[column]));
   await emit('sql_execute', 'completed', `查询完成，返回 ${rows.length} 行`);
-  const insights = buildInsights(columns, rows);
+  const insights = buildInsights(columns, rows, query);
   const charts = buildChart(columns, rows, query, generateChart === true);
   await emit('analysis', 'completed', charts.length ? '数据分析和图表配置已生成' : '数据分析完成，无需生成图表');
   return {
     schema_version: '1.0',
     status: 'completed',
-    answer: buildAnswer(columns, rows),
+    answer: buildAnswer(columns, rows, query),
     insights,
     table: { columns, rows, returned_rows: rows.length, truncated: rows.length >= MAX_RESULT_ROWS },
     charts,
     sql: { text: sql, dialect: 'sqlite', duration_ms: Date.now() - started, validation: { is_valid: true, parser: 'cloudflare-readonly-guard' } },
     scope: {
-      database: 'Cloudflare D1 · AskData Demo',
+      database: 'Cloudflare D1 · 问数 Demo',
       row_count: rows.length,
       truncated: rows.length >= MAX_RESULT_ROWS,
       chart_requested: generateChart === true || CHART_INTENT.test(query),
@@ -480,7 +656,7 @@ async function executeAgent(env, query, generateChart, emit = async () => {}) {
       drill_actions: buildDrillActions(columns, rows),
     },
     warnings,
-    suggested_questions: ['按区域查看销售额排名', '生成最近30天销售趋势图', '销售额最高的前5个产品是什么？'],
+    suggested_questions: ['按区域查看销售额排名', '各品类销售额占比是多少？', '本月与上月销售额对比如何？'],
     error: null,
     title: plan.title,
   };
@@ -560,9 +736,9 @@ async function exportResponse(db, ownerId, kind, id, format, identity) {
   const result = parseJson(row.result_json, {});
   const base = safeTitle(row.title, 'askdata-report').replace(/[^\u4e00-\u9fa5\w-]+/g, '_');
   if (format === 'csv') {
-    return new Response(toCsv(result), { headers: responseHeaders(identity, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${encodeURIComponent(base)}.csv"` }) });
+    return new Response(toCsv(result), { headers: responseHeaders(identity, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="wenshu-report.csv"; filename*=UTF-8''${encodeURIComponent(`${base}.csv`)}` }) });
   }
-  return new Response(toExcelHtml(result), { headers: responseHeaders(identity, { 'Content-Type': 'application/vnd.ms-excel; charset=utf-8', 'Content-Disposition': `attachment; filename="${encodeURIComponent(base)}.xls"` }) });
+  return new Response(toExcelHtml(result), { headers: responseHeaders(identity, { 'Content-Type': 'application/vnd.ms-excel; charset=utf-8', 'Content-Disposition': `attachment; filename="wenshu-report.xls"; filename*=UTF-8''${encodeURIComponent(`${base}.xls`)}` }) });
 }
 
 function dashboardPayload(row, cards = []) {

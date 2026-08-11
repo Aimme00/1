@@ -3,10 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="问数 AI 数据分析 Agent" />
-    <title>问数 · AI 数据分析</title>
+    <meta name="description" content="问数 · 描述性数据分析 Agent" />
+    <title>问数 · 描述性数据分析</title>
     <link rel="stylesheet" href="./styles.css?v=20260810-tester-mode" />
     <link rel="stylesheet" href="./dashboard.css?v=20260810-tester-mode" />
+    <style>.analysis-boundary{max-width:760px!important;margin:-15px auto 0!important;padding:10px 14px;border:1px solid #e7e9ef;border-radius:10px;color:#7b8494!important;background:#fff;font-size:11px!important;line-height:1.6!important}</style>
   </head>
   <body>
     <section class="auth-screen" id="authScreen" aria-labelledby="loginTitle">
@@ -52,7 +53,7 @@
       <main class="workspace">
         <header class="topbar">
           <button class="mobile-menu" id="mobileMenu" aria-label="展开菜单">☰</button>
-          <div><span class="eyebrow">问数工作台</span><h1>数据洞察助手</h1></div>
+          <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1></div>
           <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="退出登录"><span class="avatar" id="userAvatar">DA</span><span class="account-name" id="accountName">Data Analyst</span><span class="logout-label">退出</span></button></div>
         </header>
 
@@ -68,15 +69,16 @@
 
           <div class="welcome" id="welcomePanel">
             <div class="welcome-orb"><span>✦</span></div>
-            <p class="eyebrow">NATURAL LANGUAGE → INSIGHT</p>
-            <h2>今天想从数据里发现什么？</h2>
-            <p>直接提问，问数会自动生成安全 SQL、分析结果并推荐合适的图表。</p>
+            <p class="eyebrow">NATURAL LANGUAGE → DESCRIPTIVE ANALYSIS</p>
+            <h2>今天想了解哪些经营数据？</h2>
+            <p>直接提问，问数会基于现有数据回答“发生了什么”，支持趋势、排名、占比、对比和分布分析。</p>
             <div class="suggestion-grid">
               <button class="suggestion" data-query="最近30天销售额趋势如何？"><span class="suggestion-icon blue">↗</span><span><strong>分析趋势</strong><small>最近30天销售额趋势如何？</small></span></button>
               <button class="suggestion" data-query="各区域订单量排名是什么？"><span class="suggestion-icon violet">≡</span><span><strong>对比排名</strong><small>各区域订单量排名是什么？</small></span></button>
-              <button class="suggestion" data-query="找出销售额异常的日期并说明原因"><span class="suggestion-icon amber">!</span><span><strong>发现异常</strong><small>找出销售额异常的日期</small></span></button>
-              <button class="suggestion" data-query="销售额最高的前5个产品是哪些？"><span class="suggestion-icon green">★</span><span><strong>业务洞察</strong><small>销售额最高的前5个产品</small></span></button>
+              <button class="suggestion" data-query="各品类销售额占比是多少？"><span class="suggestion-icon amber">%</span><span><strong>查看占比</strong><small>各品类销售额占比是多少？</small></span></button>
+              <button class="suggestion" data-query="本月与上月销售额对比如何？"><span class="suggestion-icon green">⇄</span><span><strong>期间对比</strong><small>本月与上月销售额对比如何？</small></span></button>
             </div>
+            <p class="analysis-boundary">当前版本不提供异常诊断、原因归因、预测或策略建议。</p>
           </div>
 
           <div class="conversation-view hidden" id="conversationView">
@@ -90,8 +92,8 @@
                 <button id="saveAnalysisButton" class="result-action primary">☆ 保存分析</button>
                 <button id="addDashboardButton" class="result-action">▦ 添加到仪表盘</button>
                 <button id="downloadCsvButton" class="result-action">↓ 下载 CSV</button>
-                <button id="downloadExcelButton" class="result-action">↓ 下载 Excel</button>
-                <button id="downloadChartButton" class="result-action">↓ 下载图表 PNG</button>
+                <button id="downloadExcelButton" class="result-action" title="下载包含分析概览、数据明细和 SQL 的 Excel 报告">↓ 下载 Excel</button>
+                <button id="downloadChartButton" class="result-action" title="需要在提问前勾选“生成图表”">↓ 下载图表 PNG</button>
               </div>
               <article class="answer-card"><span class="section-kicker">分析结论</span><h2 id="answerTitle">分析完成</h2><div id="answerText"></div><div class="scope-line" id="scopeLine"></div></article>
               <div class="insight-grid" id="insightGrid"></div>
@@ -107,13 +109,14 @@
         <footer class="composer-wrap" id="composerWrap">
           <form class="composer" id="chatForm">
             <textarea id="queryInput" rows="1" placeholder="询问数据，例如：最近30天销售额趋势如何？" maxlength="4000"></textarea>
-            <div class="composer-bottom"><div class="composer-options"><span class="composer-hint">只读查询 · SQL 安全校验</span><span class="composer-hint hidden" id="quotaHint"></span><label class="chart-option"><input type="checkbox" id="generateChart" /> 生成图表</label></div><button type="submit" id="sendButton" aria-label="发送">↑</button></div>
+            <div class="composer-bottom"><div class="composer-options"><span class="composer-hint">只读查询 · SQL 安全校验</span><span class="composer-hint hidden" id="quotaHint"></span><label class="chart-option"><input type="checkbox" id="generateChart" /> 生成并可下载图表</label></div><button type="submit" id="sendButton" aria-label="发送">↑</button></div>
           </form>
-          <p class="disclaimer">AI 可能会产生错误，重要决策请核对原始数据。</p>
+          <p class="disclaimer">结果仅描述现有数据，不代表因果判断或未来预测；重要决策请核对原始数据。</p>
         </footer>
       </main>
     </div>
     <script src="./preview-bootstrap.js" defer></script>
-    <script src="./app.js?v=20260810-tester-mode" defer></script>
+    <script src="./app.js?v=20260811-descriptive-analysis" defer></script>
+    <script src="./downloads.js?v=20260811-browser-downloads" defer></script>
   </body>
 </html>

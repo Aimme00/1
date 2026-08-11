@@ -1,11 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assertSupportedQuery, buildChart, buildModelRequest, fallbackSql, testerAuthorized, toCsv, validateSql } from '../functions/api/[[path]].js';
+import { assertSupportedQuery, buildAnswer, buildChart, buildInsights, buildModelRequest, fallbackSql, isDeterministicDescriptiveQuery, isRegionalTopProductsQuery, planSqlQuery, testerAuthorized, toCsv, validateSql } from '../functions/api/[[path]].js';
 
 test('fallback SQL covers the main demo intents', () => {
   assert.match(fallbackSql('各区域订单排名'), /regions/i);
   assert.match(fallbackSql('销售额最高的产品'), /products/i);
   assert.match(fallbackSql('最近30天趋势'), /order_date/i);
+  assert.match(fallbackSql('各品类销售额占比'), /sales_share_pct/i);
+  assert.match(fallbackSql('本月与上月销售额对比'), /month_over_month_pct/i);
+});
+
+test('demo is explicitly limited to descriptive analysis', () => {
+  for (const query of ['找出销售额异常的日期', '为什么本月销售额下降', '预测下月销售额', '给出经营策略建议']) {
+    assert.throws(() => assertSupportedQuery(query), /描述性分析/);
+  }
+  for (const query of ['最近30天销售额趋势', '各区域订单量排名', '各品类销售额占比', '本月与上月销售额对比', '销售额区域分布']) {
+    assert.equal(assertSupportedQuery(query), true);
+    assert.equal(isDeterministicDescriptiveQuery(query), true);
+  }
 });
 
 test('regional top products use an outer query to filter window rankings', () => {
@@ -14,6 +26,66 @@ test('regional top products use an outer query to filter window rankings', () =>
   assert.match(sql, /FROM ranked\s+WHERE region_rank<=3/i);
   assert.doesNotMatch(sql, /WHERE[^)]*ROW_NUMBER/i);
   assert.equal(validateSql(sql).endsWith('LIMIT 500'), true);
+  assert.equal(isRegionalTopProductsQuery('最近30天各区域销售额排名前3的产品'), true);
+});
+
+test('regional product result uses readable labels and consistent conclusions', () => {
+  const columns = ['region', 'product_name', 'product_sales', 'sales_quantity', 'order_count', 'region_sales', 'sales_share_pct', 'region_rank'];
+  const rows = [
+    ['华南', '扫地机器人', 86376, 24, 8, 124768, 69.23, 1],
+    ['华南', '轻薄笔记本', 27996, 4, 4, 124768, 22.44, 2],
+    ['华南', '无线耳机', 10396, 8, 3, 124768, 8.33, 3],
+    ['华东', '4K 显示器', 32990, 10, 4, 72984, 45.2, 1],
+  ];
+  const [chart] = buildChart(columns, rows, '各区域销售额排名前3的产品并生成柱状图', true);
+  assert.equal(chart.option.orientation, 'horizontal');
+  assert.deepEqual(chart.option.series[0].data[0], { name: '华南 · 扫地机器人', value: 86376 });
+  assert.match(buildAnswer(columns, rows), /华南.*扫地机器人.*69.23%/);
+  assert.match(buildInsights(columns, rows)[2].text, /华南.*69.23%/);
+});
+
+test('regional top-3 planning does not call the configured model API', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => { fetchCalls += 1; throw new Error('offline test must not call the network'); };
+  try {
+    const plan = await planSqlQuery({ MODEL_API_KEY: 'must-not-be-used' }, '最近30天各区域销售额排名前3的产品');
+    assert.equal(fetchCalls, 0);
+    assert.equal(plan.modelUsed, false);
+    assert.match(plan.warning, /不消耗模型 API/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('standard descriptive analysis does not call the configured model API', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = async () => { fetchCalls += 1; throw new Error('offline test must not call the network'); };
+  try {
+    for (const query of ['最近30天销售额趋势', '各区域订单量排名', '各品类销售额占比', '本月与上月销售额对比', '销售额区域分布']) {
+      const plan = await planSqlQuery({ MODEL_API_KEY: 'must-not-be-used' }, query);
+      assert.equal(plan.modelUsed, false);
+      assert.match(plan.warning, /不消耗模型 API/);
+    }
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('time series and share results use descriptive conclusions instead of ranking templates', () => {
+  const trendColumns = ['order_date', 'sales_amount', 'order_count'];
+  const trendRows = [['2026-08-01', 100, 2], ['2026-08-02', 150, 3], ['2026-08-03', 120, 2]];
+  const trendAnswer = buildAnswer(trendColumns, trendRows, '最近30天销售额趋势');
+  assert.match(trendAnswer, /销售额合计 370/);
+  assert.match(trendAnswer, /最高日期为 2026-08-02/);
+  assert.doesNotMatch(trendAnswer, /排名第一/);
+
+  const shareColumns = ['category_name', 'sales_amount', 'quantity', 'sales_share_pct'];
+  const shareRows = [['电脑办公', 600, 10, 60], ['手机数码', 400, 8, 40]];
+  assert.match(buildAnswer(shareColumns, shareRows, '各品类销售额占比'), /电脑办公占比最高.*60%/);
+  assert.match(buildInsights(shareColumns, shareRows, '各品类销售额占比')[2].text, /100%/);
 });
 
 test('validator accepts read-only business SQL and enforces limit', () => {

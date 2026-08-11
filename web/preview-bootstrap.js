@@ -42,7 +42,7 @@
       option: {
         xAxis: { type: 'category', data: rows.map(row => row[0]) },
         yAxis: { type: 'value' },
-        series: [{ type: 'line', data: rows.map(row => row[1]) }],
+        series: [{ type: /(date|month)/i.test(columns[0]) ? 'line' : 'bar', data: rows.map(row => row[1]) }],
       },
     }];
   }
@@ -75,17 +75,37 @@
       ];
       sql = "SELECT products.product_name, ROUND(SUM(order_items.line_amount), 2) AS sales_amount FROM order_items JOIN products ON order_items.product_id = products.product_id JOIN orders ON order_items.order_id = orders.order_id WHERE orders.order_status = 'completed' GROUP BY products.product_id, products.product_name ORDER BY sales_amount DESC LIMIT 5;";
       drillActions = [{ id: 'product_to_region', direction: 'down', label: '下钻轻薄笔记本的区域分布', query: '查询产品轻薄笔记本在各区域的销售额排名' }];
+    } else if (/品类|类别|分类/.test(query)) {
+      columns = ['category_name', 'sales_amount', 'sales_share_pct'];
+      rows = [['电脑办公', 288320, 38.6], ['手机数码', 236666, 31.7], ['家用电器', 131842, 17.7], ['智能穿戴', 89640, 12.0]];
+      answer = '本次共比较 4 个品类；电脑办公销售额占比最高，为 38.6%。详细构成可在数据表中查看。';
+      insights = [
+        { title: '构成项数量', text: '本次共比较 4 个品类。' },
+        { title: '占比最高', text: '电脑办公占比最高，为 38.6%。' },
+        { title: '头部占比', text: '前两项合计占 70.3%。' },
+      ];
+      sql = "WITH grouped AS (SELECT categories.category_name, SUM(order_items.line_amount) AS sales_amount FROM order_items JOIN products ON order_items.product_id=products.product_id JOIN categories ON products.category_id=categories.category_id JOIN orders ON order_items.order_id=orders.order_id WHERE orders.order_status='completed' GROUP BY categories.category_name) SELECT category_name,sales_amount,ROUND(sales_amount*100.0/SUM(sales_amount) OVER (),2) AS sales_share_pct FROM grouped ORDER BY sales_amount DESC;";
+    } else if (/本月|上月|环比|月度|按月|月份/.test(query)) {
+      columns = ['sales_month', 'sales_amount', 'month_over_month_pct'];
+      rows = [['2026-07', 284560, null], ['2026-08', 319880, 12.41]];
+      answer = '2026-08销售额为 319,880，较上一期增长 12.41%；上一期 2026-07为 284,560。';
+      insights = [
+        { title: '对比期间', text: '覆盖 2026-07 至 2026-08，共 2 个期间。' },
+        { title: '最新期间销售额', text: '2026-08为 319,880。' },
+        { title: '环比变化', text: '较上一期增长 12.41%。' },
+      ];
+      sql = "SELECT strftime('%Y-%m',order_date) AS sales_month,ROUND(SUM(sales_amount),2) AS sales_amount FROM orders WHERE order_status='completed' GROUP BY sales_month ORDER BY sales_month;";
     } else {
       columns = ['order_date', 'sales_amount'];
       rows = Array.from({ length: 12 }, (_, index) => {
         const day = String(index + 1).padStart(2, '0');
-        return [`08-${day}`, 9200 + index * 630 + (index === 7 ? 9500 : 0)];
+        return [`08-${day}`, 9200 + index * 630];
       });
-      answer = '最近销售额整体呈上升趋势，期间出现一次明显峰值，建议继续查看当天产品构成。';
+      answer = '所选期间共覆盖 12 个有成交日期，销售额合计 151,980；期末较期初增长 75.33%，销售额最高日期为 08-12（16,130）。';
       insights = [
         { title: '总体趋势', text: '销售额较期初增长约 75%。' },
-        { title: '异常峰值', text: '08-08 的销售额显著高于日常水平。' },
-        { title: '数据范围', text: '当前预览展示 12 个日期样本。' },
+        { title: '销售额合计', text: '所选期间合计为 151,980。' },
+        { title: '最高销售日期', text: '08-12最高，为 16,130。' },
       ];
       sql = "SELECT order_date, ROUND(SUM(sales_amount), 2) AS sales_amount FROM orders WHERE order_status = 'completed' AND order_date >= date('now', '-29 day') GROUP BY order_date ORDER BY order_date ASC LIMIT 5000;";
       drillActions = [{ id: 'day_to_month', direction: 'up', label: '上卷到月度销售额', query: '按月汇总最近180天销售额趋势' }];
@@ -101,7 +121,7 @@
       charts: chartFor(query, columns, rows, chartRequested),
       sql: { text: sql, dialect: 'sqlite', duration_ms: 8, validation: { is_valid: true, parser: 'preview' } },
       scope: {
-        database: 'trade_db',
+        database: '问数 Demo',
         row_count: rows.length,
         truncated: false,
         chart_requested: chartRequested || /生成图表|生成图片|折线图|柱状图|可视化/.test(query),
@@ -120,11 +140,14 @@
     if (path === '/api/auth/me') return json({ user: previewUser });
     if (path === '/api/auth/login') return json({ user: previewUser });
     if (path === '/api/auth/logout') return noContent();
-    if (path === '/api/data-source/status') return json({ database: 'trade_db', alias: 'trade_db', database_type: 'sqlite', ready: true, table_count: 6, column_count: 32 });
+    if (path === '/api/data-source/status') return json({ database: '问数 Demo', alias: '本地预览', database_type: 'sqlite', ready: true, table_count: 6, column_count: 32 });
     if (path === '/api/conversations') return json({ items: [] });
     if (path.startsWith('/api/conversations/')) return json({ items: [] });
 
     if (path === '/api/chat' && method === 'POST') {
+      if (/异常|峰值|原因|为什么|为何|归因|诊断|预测|预估|未来|建议|策略|怎么办/.test(body.query || '')) {
+        return json({ detail: '当前 Demo 定位为描述性分析，只回答数据中“发生了什么”。暂不提供异常诊断、原因归因、预测或策略建议。' }, 422);
+      }
       const runId = `run_preview_${++sequence}`;
       runs.set(runId, { query: body.query || '最近30天销售额趋势如何？', generate_chart: body.generate_chart === true, result: null });
       return json({ run_id: runId, status: 'pending', events_url: `/api/runs/${runId}/events`, result_url: `/api/runs/${runId}` }, 202);
