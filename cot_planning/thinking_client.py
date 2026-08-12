@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 import urllib.request
 from dataclasses import dataclass
 from typing import Iterator
+
+from model_provider import resolve_model_settings
 
 
 @dataclass
@@ -19,8 +20,9 @@ class ThinkingModelConfig:
     """
 
     api_key: str = ""
-    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    model: str = "qwen-plus"
+    base_url: str = ""
+    model: str = ""
+    provider: str = ""
     temperature: float = 0.0
     timeout: int = 60
     use_mock_when_no_api_key: bool = True
@@ -37,9 +39,17 @@ class ThinkingModelClient:
 
     def __init__(self, config: ThinkingModelConfig | None = None):
         self.config = config or ThinkingModelConfig()
-
-        if not self.config.api_key:
-            self.config.api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        settings = resolve_model_settings(
+            role="cot",
+            provider=self.config.provider,
+            api_key=self.config.api_key,
+            base_url=self.config.base_url,
+            model=self.config.model,
+        )
+        self.config.provider = settings.provider
+        self.config.api_key = settings.api_key
+        self.config.base_url = settings.base_url
+        self.config.model = settings.model
 
     def generate(self, prompt: str) -> str:
         """
@@ -51,7 +61,7 @@ class ThinkingModelClient:
         if self.config.use_mock_when_no_api_key:
             return self._mock_generate(prompt)
 
-        raise ValueError("缺少 DASHSCOPE_API_KEY，无法调用思考模型。")
+        raise ValueError(f"缺少 {self.config.provider} API Key，无法调用思考模型。")
 
     def generate_stream(self, prompt: str) -> Iterator[str]:
         """
@@ -68,7 +78,7 @@ class ThinkingModelClient:
             yield from self._mock_generate_stream(prompt)
             return
 
-        raise ValueError("缺少 DASHSCOPE_API_KEY，无法调用思考模型。")
+        raise ValueError(f"缺少 {self.config.provider} API Key，无法调用思考模型。")
 
     def _call_model(self, prompt: str) -> str:
         """

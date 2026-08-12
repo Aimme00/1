@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 from askdata_memory import ConversationMemoryContext, ConversationMemoryService, LongTermMemory
 from cot_planning import ThinkingModelClient, ThinkingModelConfig
+from model_provider import has_model_api_key
 
 from .conversation_service import MemoryAwareAskDataService
 from .data_qa import DataQAClient, ModelDataQAClient, RuleBasedDataQAClient
@@ -139,7 +139,7 @@ class DynamicAskDataService:
 
     @staticmethod
     def _build_model_client():
-        if not os.getenv("DASHSCOPE_API_KEY"):
+        if not has_model_api_key():
             return None
         return ThinkingModelClient(
             ThinkingModelConfig(

@@ -28,6 +28,7 @@ from sql_validation import (
     SQLValidator,
     SQLValidatorConfig,
 )
+from model_provider import allow_mock_model
 
 from .demo_data import create_trade_demo_database, get_trade_business_meta
 from .drilldown import build_drill_actions
@@ -615,7 +616,7 @@ class AskDataText2SQLPipeline:
         return CotPlanner(
             thinking_client=ThinkingModelClient(
                 ThinkingModelConfig(
-                    use_mock_when_no_api_key=True,
+                    use_mock_when_no_api_key=allow_mock_model(),
                     temperature=0.0,
                 )
             )
@@ -659,6 +660,6 @@ class AskDataText2SQLPipeline:
         return SqlGenerator(
             schema_store=schema_store,
             coder_client=CoderModelClient(
-                CoderModelConfig(use_mock_when_no_api_key=True)
+                CoderModelConfig(use_mock_when_no_api_key=allow_mock_model())
             ),
         )

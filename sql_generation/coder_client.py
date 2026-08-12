@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import urllib.request
 from dataclasses import dataclass
+
+from model_provider import resolve_model_settings
 
 
 @dataclass
@@ -17,8 +18,9 @@ class CoderModelConfig:
     """
 
     api_key: str = ""
-    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    model: str = "qwen-plus"
+    base_url: str = ""
+    model: str = ""
+    provider: str = ""
     temperature: float = 0.0
     timeout: int = 60
     use_mock_when_no_api_key: bool = True
@@ -31,9 +33,17 @@ class CoderModelClient:
 
     def __init__(self, config: CoderModelConfig | None = None):
         self.config = config or CoderModelConfig()
-
-        if not self.config.api_key:
-            self.config.api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        settings = resolve_model_settings(
+            role="coder",
+            provider=self.config.provider,
+            api_key=self.config.api_key,
+            base_url=self.config.base_url,
+            model=self.config.model,
+        )
+        self.config.provider = settings.provider
+        self.config.api_key = settings.api_key
+        self.config.base_url = settings.base_url
+        self.config.model = settings.model
 
     def generate_sql(self, prompt: str) -> str:
         """
@@ -45,7 +55,7 @@ class CoderModelClient:
         if self.config.use_mock_when_no_api_key:
             return self._mock_generate(prompt)
 
-        raise ValueError("缺少 DASHSCOPE_API_KEY，无法调用 Coder 模型。")
+        raise ValueError(f"缺少 {self.config.provider} API Key，无法调用 Coder 模型。")
 
     def _call_model(self, prompt: str) -> str:
         """

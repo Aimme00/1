@@ -170,8 +170,15 @@ chmod +x run_web.sh
 ./run_web.sh
 ```
 
-浏览器打开 `http://127.0.0.1:8000`。不配置 `DASHSCOPE_API_KEY` 时会使用内置 Mock 模型和演示数据库，适合验证整条网页链路。
-使用真实模型前，在当前 shell 中导出 `.env.example` 里对应的模型环境变量。
+浏览器打开 `http://127.0.0.1:8000`。不配置模型 API Key 时会使用内置 Mock 模型和演示数据库，适合验证整条网页链路且不会产生模型费用。
+
+使用 DeepSeek 时先复制配置模板：
+
+```bash
+cp .env.example .env
+```
+
+然后只在本地 `.env` 中填写 `DEEPSEEK_API_KEY`。启动脚本会自动读取 `.env`；该文件已加入 `.gitignore`，不要将密钥提交到 GitHub。也可以把 `ASKDATA_LLM_PROVIDER` 改为 `dashscope` 继续使用原来的 Qwen 配置。
 
 开发模式默认登录账号为 `demo@askdata.local`，密码为 `askdata-demo`。正式部署不得继续使用该密码。
 
@@ -423,3 +430,11 @@ Optional tester secret: ASKDATA_TEST_TOKEN
 ```
 
 完整步骤见 [Cloudflare 部署指南](docs/CLOUDFLARE部署指南.md)。模型密钥只放 Cloudflare Secret 或本机 `.dev.vars`，不要提交到代码仓库。
+
+## Render 免费部署完整 Python Agent
+
+仓库根目录的 `render.yaml` 可在 Render Free Web Service 上运行完整 FastAPI/Python Agent，包含 Schema 检索、CoT 规划、SQL 生成与校验、查询执行、描述性分析和下载能力。生产环境默认禁止模型 Mock，缺少真实 DeepSeek Key 时不会伪装成真实分析。
+
+公开体验默认按访客网络限制 2 次提问或钻取，项目所有者可通过 `ASKDATA_TEST_TOKEN` 开启不限次数测试模式。Render 免费实例闲置后会休眠且没有持久磁盘，因此重启后历史、仪表盘和访问计数会重置；内置演示数据库会自动重建。
+
+部署步骤见 [Render 免费部署指南](docs/Render免费部署指南.md)。

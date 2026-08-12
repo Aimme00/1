@@ -22,6 +22,7 @@ from .auth import (
     AuthenticationRateLimitError,
 )
 from .data_source import DataSourceUnavailableError
+from .quota import DemoQuotaConfig, DemoQuotaExceededError, DemoQuotaService
 from .run_manager import RunNotFoundError
 from .service import AskDataApplicationService, RunAccessError, RunNotReadyError
 
@@ -72,6 +73,7 @@ def create_app(
     app = FastAPI(title="AskData Agent API", version="0.9.0")
     app.state.askdata = service or AskDataApplicationService(runtime_dir=RUNTIME_DIR)
     app.state.auth = auth_service or AuthService(AuthConfig.from_environment(RUNTIME_DIR))
+    app.state.quota = DemoQuotaService(DemoQuotaConfig.from_environment(RUNTIME_DIR))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[origin.strip() for origin in os.getenv(
@@ -92,6 +94,27 @@ def create_app(
     @app.get("/health")
     def health():
         return {"status": "ok", "version": "0.9.0"}
+
+    def request_subject(request: Request) -> str:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+        connecting_ip = request.headers.get("cf-connecting-ip", "").strip()
+        client_ip = request.client.host if request.client else "unknown"
+        return connecting_ip or forwarded or client_ip
+
+    def quota_status(request: Request) -> dict:
+        return app.state.quota.status(
+            subject=request_subject(request),
+            tester_token=request.headers.get("x-askdata-test-token", ""),
+        )
+
+    def consume_quota(request: Request) -> dict:
+        try:
+            return app.state.quota.consume(
+                subject=request_subject(request),
+                tester_token=request.headers.get("x-askdata-test-token", ""),
+            )
+        except DemoQuotaExceededError as exc:
+            raise HTTPException(status_code=429, detail=str(exc))
 
     def require_user(request: Request) -> AuthUser:
         token = request.cookies.get(app.state.auth.config.cookie_name, "")
@@ -142,6 +165,17 @@ def create_app(
     def current_user(user: AuthUser = Depends(require_user)):
         return {"user": user.to_dict()}
 
+    @app.get("/api/health")
+    def api_health(request: Request, user: AuthUser = Depends(require_user)):
+        del user
+        quota = quota_status(request)
+        return {
+            "status": "ok",
+            "version": "0.9.0",
+            "tester_mode": quota["unlimited"],
+            "quota": quota,
+        }
+
     @app.post("/api/auth/logout", status_code=204)
     def logout(request: Request, user: AuthUser = Depends(require_user)):
         del user
@@ -152,9 +186,14 @@ def create_app(
         return response
 
     @app.post("/api/chat", status_code=202)
-    def submit_chat(body: ChatRequest, user: AuthUser = Depends(require_user)):
+    def submit_chat(
+        body: ChatRequest,
+        request: Request,
+        user: AuthUser = Depends(require_user),
+    ):
         if not app.state.askdata.data_source_status().get("ready"):
             raise HTTPException(status_code=503, detail="数据源尚未连接，请联系管理员同步 Schema")
+        quota = consume_quota(request)
         record = app.state.askdata.submit_chat(
             user_id=user.id,
             session_id=body.session_id,
@@ -167,15 +206,21 @@ def create_app(
             "status": record.status,
             "events_url": f"/api/runs/{record.run_id}/events",
             "result_url": f"/api/runs/{record.run_id}",
+            "quota": quota,
         }
 
     @app.post("/api/drilldown", status_code=202)
     def submit_drilldown(
         body: DrilldownRequest,
+        request: Request,
         user: AuthUser = Depends(require_user),
     ):
         if not app.state.askdata.data_source_status().get("ready"):
             raise HTTPException(status_code=503, detail="数据源尚未连接")
+        parent = require_owned_run(body.parent_run_id, user)
+        if parent.status != "completed" or parent.result is None:
+            raise HTTPException(status_code=409, detail="父分析尚未完成")
+        quota = consume_quota(request)
         try:
             record = app.state.askdata.submit_drilldown(
                 user_id=user.id,
@@ -197,12 +242,23 @@ def create_app(
             "result_url": f"/api/runs/{record.run_id}",
             "parent_run_id": body.parent_run_id,
             "direction": body.direction,
+            "quota": quota,
         }
 
     @app.get("/api/data-source/status")
-    def data_source_status(user: AuthUser = Depends(require_user)):
+    def data_source_status(
+        request: Request,
+        user: AuthUser = Depends(require_user),
+    ):
         del user
-        return app.state.askdata.data_source_status()
+        status = app.state.askdata.data_source_status()
+        quota = quota_status(request)
+        status.update(
+            query_limit=quota["limit"],
+            query_remaining=quota["remaining"],
+            query_unlimited=quota["unlimited"],
+        )
+        return status
 
     @app.post("/api/data-source/test")
     def test_data_source(admin: AuthUser = Depends(require_admin)):

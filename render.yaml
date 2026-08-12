@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: wenshu-python-agent
+    runtime: python
+    plan: free
+    autoDeployTrigger: commit
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ASKDATA_ENV
+        value: production
+      - key: ASKDATA_RUNTIME_DIR
+        value: /tmp/askdata-runtime
+      - key: ASKDATA_COOKIE_SECURE
+        value: "true"
+      - key: ASKDATA_LLM_PROVIDER
+        value: deepseek
+      - key: ASKDATA_ALLOW_MOCK_MODEL
+        value: "false"
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.deepseek.com/chat/completions
+      - key: DEEPSEEK_COT_MODEL
+        value: deepseek-v4-flash
+      - key: DEEPSEEK_CODER_MODEL
+        value: deepseek-v4-flash
+      - key: ASKDATA_DATABASE_TYPE
+        value: sqlite
+      - key: ASKDATA_DATABASE_ALIAS
+        value: trade_db
+      - key: ASKDATA_ENFORCE_READONLY
+        value: "true"
+      - key: ASKDATA_REQUIRE_SQLGLOT
+        value: "true"
+      - key: ASKDATA_BOOTSTRAP_EMAIL
+        sync: false
+      - key: ASKDATA_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: ASKDATA_BOOTSTRAP_DISPLAY_NAME
+        value: Interview Demo
+      - key: ASKDATA_GUEST_QUERY_LIMIT
+        value: "2"
+      - key: ASKDATA_QUOTA_SALT
+        generateValue: true
+      - key: ASKDATA_TEST_TOKEN
+        sync: false
