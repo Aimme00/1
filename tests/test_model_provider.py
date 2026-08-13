@@ -68,7 +68,7 @@ class DeepSeekProviderTestCase(unittest.TestCase):
     def test_mock_remains_available_without_any_key(self):
         with patch.dict(os.environ, {}, clear=True):
             settings = resolve_model_settings(role="cot")
-            self.assertEqual(settings.provider, "dashscope")
+            self.assertEqual(settings.provider, "deepseek")
             self.assertEqual(settings.api_key, "")
             client = ThinkingModelClient(ThinkingModelConfig(use_mock_when_no_api_key=True))
             self.assertIn("步骤1", client.generate("用户问题：查询利率"))

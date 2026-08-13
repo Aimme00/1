@@ -19,8 +19,14 @@ class RenderDeploymentTestCase(unittest.TestCase):
         self.assertIn("DEEPSEEK_API_KEY\n        sync: false", text)
         self.assertNotIn("sk-", text)
 
-    def test_production_disables_mock_model_by_default(self) -> None:
+    def test_production_uses_offline_fallback_only_when_no_key_exists(self) -> None:
         with patch.dict("os.environ", {"ASKDATA_ENV": "production"}, clear=True):
+            self.assertTrue(allow_mock_model())
+        with patch.dict(
+            "os.environ",
+            {"ASKDATA_ENV": "production", "DEEPSEEK_API_KEY": "test-key"},
+            clear=True,
+        ):
             self.assertFalse(allow_mock_model())
         with patch.dict(
             "os.environ",

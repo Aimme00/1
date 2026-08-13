@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from env_settings import env_int, env_text
+from env_settings import env_int, env_text, session_secret
 from .auth import (
     AuthUser,
     AuthenticationError,
@@ -35,16 +35,16 @@ class SignedAuthConfig:
     def from_environment(cls) -> "SignedAuthConfig":
         email = env_text("ASKDATA_BOOTSTRAP_EMAIL", "guest@askdata.demo").lower()
         password = env_text("ASKDATA_BOOTSTRAP_PASSWORD", strip=False)
-        secret = env_text("ASKDATA_SESSION_SECRET")
+        # Public guest access does not need an administrator password.  Ignore
+        # an accidentally blank/short dashboard field instead of crashing the
+        # complete serverless application at import time.
         if password and len(password) < 8:
-            raise InvalidBootstrapUserError("登录密码至少需要 8 个字符")
-        if len(secret) < 32:
-            raise InvalidBootstrapUserError("ASKDATA_SESSION_SECRET 至少需要 32 个字符")
+            password = ""
         return cls(
             email=email,
             password=password,
             display_name=env_text("ASKDATA_BOOTSTRAP_DISPLAY_NAME", "Interview Demo"),
-            secret=secret,
+            secret=session_secret(),
             session_ttl_seconds=env_int(
                 "ASKDATA_SESSION_TTL_SECONDS", 86_400, minimum=300
             ),

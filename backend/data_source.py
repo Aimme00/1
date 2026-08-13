@@ -43,11 +43,16 @@ class DataSourceSettings:
 
     @classmethod
     def from_environment(cls) -> "DataSourceSettings":
-        database_type = env_text(
+        configured_type = env_text(
             "ASKDATA_DATABASE_TYPE", "postgres" if postgres_url() else "sqlite"
         ).lower()
+        database_type = {
+            "postgresql": "postgres",
+            "neon": "postgres",
+            "d1": "sqlite",
+        }.get(configured_type, configured_type)
         if database_type not in {"sqlite", "mysql", "postgres"}:
-            raise ValueError("ASKDATA_DATABASE_TYPE 只支持 sqlite、mysql 或 postgres")
+            database_type = "postgres" if postgres_url() else "sqlite"
         default_alias = (
             env_text("ASKDATA_MYSQL_DATABASE", "analytics")
             if database_type == "mysql"

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from env_settings import env_int
+
 
 def ensure_postgres_schema(database_url: str) -> None:
     """幂等初始化演示业务表和 Vercel 持久化表。"""
@@ -104,7 +106,12 @@ def ensure_postgres_schema(database_url: str) -> None:
     CREATE INDEX IF NOT EXISTS idx_askdata_runs_user
       ON _askdata_runs(user_id, created_at DESC);
     """
-    with psycopg.connect(database_url) as connection:
+    with psycopg.connect(
+        database_url,
+        connect_timeout=env_int(
+            "ASKDATA_POSTGRES_CONNECT_TIMEOUT", 10, minimum=1, maximum=30
+        ),
+    ) as connection:
         # Vercel 可能同时冷启动多个实例。事务级 advisory lock 可避免多个实例
         # 在同一时刻重复执行建表语句，连接提交或回滚后会自动释放。
         connection.execute("SELECT pg_advisory_xact_lock(%s)", (2026081201,))

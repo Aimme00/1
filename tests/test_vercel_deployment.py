@@ -56,17 +56,16 @@ class VercelDeploymentContractTestCase(unittest.TestCase):
             self.assertEqual(DemoQuotaConfig.from_environment("ignored").query_limit, 2)
             self.assertEqual(runtime_dir(self.root), Path("/tmp/askdata_runtime"))
 
-    def test_vercel_validation_reports_every_missing_required_value_at_once(self):
+    def test_vercel_validation_reports_issues_without_crashing_web_startup(self):
         with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
-            with self.assertRaises(RuntimeError) as caught:
-                validate_vercel_environment()
-        message = str(caught.exception)
+            issues = validate_vercel_environment()
+        message = "；".join(issues)
         for name in (
             "ASKDATA_POSTGRES_URL",
-            "ASKDATA_SESSION_SECRET",
-            "DASHSCOPE_API_KEY",
+            "DEEPSEEK_API_KEY",
         ):
             self.assertIn(name, message)
+        self.assertNotIn("ASKDATA_SESSION_SECRET", message)
 
     def test_complete_vercel_environment_passes_validation(self):
         env = {

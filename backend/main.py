@@ -12,7 +12,13 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from env_settings import env_text, postgres_url, runtime_dir, validate_vercel_environment
+from env_settings import (
+    env_text,
+    is_vercel,
+    postgres_url,
+    runtime_dir,
+    validate_vercel_environment,
+)
 from reporting import export_csv, export_xlsx
 
 from .auth import (
@@ -74,23 +80,81 @@ def create_app(
     service: Optional[AskDataApplicationService] = None,
     auth_service: Optional[AuthService] = None,
 ) -> FastAPI:
-    validate_vercel_environment()
+    startup_issues = validate_vercel_environment()
     database_url = postgres_url()
+    postgres_ready = False
     if database_url:
-        ensure_postgres_schema(database_url)
-        if service is None:
-            service = AskDataApplicationService(
-                runtime_dir=RUNTIME_DIR,
-                run_manager=PostgresRunManager(database_url),
-            )
-        if auth_service is None and (
-            env_text("VERCEL") or env_text("ASKDATA_SESSION_SECRET")
-        ):
-            auth_service = SignedAuthService(SignedAuthConfig.from_environment())
+        try:
+            ensure_postgres_schema(database_url)
+            if service is None:
+                service = AskDataApplicationService(
+                    runtime_dir=RUNTIME_DIR,
+                    run_manager=PostgresRunManager(database_url),
+                )
+            postgres_ready = bool(service.data_source_status().get("ready"))
+            if not postgres_ready:
+                startup_issues.append("Neon Schema 同步暂不可用，已启用本地演示数据")
+                service = None
+        except Exception as exc:
+            startup_issues.append(f"Postgres 初始化暂不可用：{type(exc).__name__}")
+    if auth_service is None and (is_vercel() or env_text("ASKDATA_SESSION_SECRET")):
+        auth_service = SignedAuthService(SignedAuthConfig.from_environment())
     app = FastAPI(title="AskData Agent API", version="0.9.0")
-    app.state.askdata = service or AskDataApplicationService(runtime_dir=RUNTIME_DIR)
+    try:
+        if service is None and database_url and not postgres_ready:
+            previous_values = {
+                key: os.environ.get(key)
+                for key in ("ASKDATA_POSTGRES_URL", "POSTGRES_URL", "DATABASE_URL")
+            }
+            previous_type = os.environ.get("ASKDATA_DATABASE_TYPE")
+            try:
+                os.environ["ASKDATA_DATABASE_TYPE"] = "sqlite"
+                for key in previous_values:
+                    os.environ.pop(key, None)
+                service = AskDataApplicationService(runtime_dir=RUNTIME_DIR)
+            finally:
+                if previous_type is None:
+                    os.environ.pop("ASKDATA_DATABASE_TYPE", None)
+                else:
+                    os.environ["ASKDATA_DATABASE_TYPE"] = previous_type
+                for key, value in previous_values.items():
+                    if value is not None:
+                        os.environ[key] = value
+        app.state.askdata = service or AskDataApplicationService(runtime_dir=RUNTIME_DIR)
+    except Exception as exc:
+        startup_issues.append(f"数据源初始化暂不可用：{type(exc).__name__}")
+        # A writable SQLite demo keeps the public interview page available even
+        # when a remote database was configured incorrectly.
+        previous_type = os.environ.get("ASKDATA_DATABASE_TYPE")
+        previous_urls = {
+            key: os.environ.get(key)
+            for key in ("ASKDATA_POSTGRES_URL", "POSTGRES_URL", "DATABASE_URL")
+        }
+        try:
+            os.environ["ASKDATA_DATABASE_TYPE"] = "sqlite"
+            for key in previous_urls:
+                os.environ.pop(key, None)
+            app.state.askdata = AskDataApplicationService(runtime_dir=RUNTIME_DIR)
+        finally:
+            if previous_type is None:
+                os.environ.pop("ASKDATA_DATABASE_TYPE", None)
+            else:
+                os.environ["ASKDATA_DATABASE_TYPE"] = previous_type
+            for key, value in previous_urls.items():
+                if value is not None:
+                    os.environ[key] = value
     app.state.auth = auth_service or AuthService(AuthConfig.from_environment(RUNTIME_DIR))
-    app.state.quota = DemoQuotaService(DemoQuotaConfig.from_environment(RUNTIME_DIR))
+    quota_config = DemoQuotaConfig.from_environment(RUNTIME_DIR)
+    if database_url and not postgres_ready:
+        quota_config = DemoQuotaConfig(
+            db_path=quota_config.db_path,
+            query_limit=quota_config.query_limit,
+            tester_token=quota_config.tester_token,
+            fingerprint_salt=quota_config.fingerprint_salt,
+            database_url="",
+        )
+    app.state.quota = DemoQuotaService(quota_config)
+    app.state.startup_issues = startup_issues
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[origin.strip() for origin in env_text(
@@ -110,7 +174,11 @@ def create_app(
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "version": "0.9.0"}
+        return {
+            "status": "ok" if app.state.askdata.data_source_status().get("ready") else "degraded",
+            "version": "0.9.0",
+            "issues": app.state.startup_issues,
+        }
 
     def request_subject(request: Request) -> str:
         forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()

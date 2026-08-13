@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from env_settings import env_int, env_text, postgres_url
+from env_settings import env_int, env_text, postgres_url, session_secret
 
 @dataclass(frozen=True)
 class DemoQuotaConfig:
@@ -28,7 +28,7 @@ class DemoQuotaConfig:
             tester_token=env_text("ASKDATA_TEST_TOKEN"),
             fingerprint_salt=env_text(
                 "ASKDATA_QUOTA_SALT",
-                env_text("ASKDATA_SESSION_SECRET", "askdata-local-quota"),
+                session_secret(),
             ),
             database_url=postgres_url(),
         )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from env_settings import env_text, production_environment
+from env_settings import env_text, llm_provider, production_environment
 
 @dataclass(frozen=True)
 class ModelProviderSettings:
@@ -22,11 +22,9 @@ def resolve_model_settings(
     model: str = "",
 ) -> ModelProviderSettings:
     """Resolve DeepSeek or DashScope settings without ever logging the secret."""
-    selected = (provider or env_text("ASKDATA_LLM_PROVIDER")).strip().lower()
-    if not selected:
-        selected = "deepseek" if env_text("DEEPSEEK_API_KEY") else "dashscope"
+    selected = (provider or llm_provider()).strip().lower()
     if selected not in {"deepseek", "dashscope"}:
-        raise ValueError("ASKDATA_LLM_PROVIDER 仅支持 deepseek 或 dashscope。")
+        selected = llm_provider()
 
     role_name = "COT" if role.lower() == "cot" else "CODER"
     if selected == "deepseek":
@@ -55,7 +53,7 @@ def resolve_model_settings(
 
 
 def has_model_api_key() -> bool:
-    selected = env_text("ASKDATA_LLM_PROVIDER").lower()
+    selected = llm_provider()
     if selected == "deepseek":
         return bool(env_text("DEEPSEEK_API_KEY"))
     if selected == "dashscope":
@@ -64,8 +62,8 @@ def has_model_api_key() -> bool:
 
 
 def allow_mock_model() -> bool:
-    """Local development may use deterministic mocks; production fails closed by default."""
+    """Use deterministic SQL planning when no billable model key is configured."""
     configured = env_text("ASKDATA_ALLOW_MOCK_MODEL").lower()
     if configured:
         return configured in {"1", "true", "yes", "on"}
-    return not production_environment()
+    return not production_environment() or not has_model_api_key()
