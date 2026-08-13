@@ -70,6 +70,31 @@ class VisualizationRoutingTestCase(unittest.TestCase):
         decision = router.route("请生成最近30天销售额折线图", build_context())
         self.assertEqual(decision.route, RouteType.DATABASE_QUERY)
 
+    def test_month_over_month_metric_question_fetches_database(self):
+        router = DynamicIntentRouter()
+        decision = router.route("本月与上月销售额对比如何？", build_context())
+        self.assertEqual(decision.route, RouteType.DATABASE_QUERY)
+        self.assertIn("business_metric", decision.signals)
+
+    def test_month_over_month_metric_question_ignores_unrelated_history(self):
+        router = DynamicIntentRouter()
+        decision = router.route(
+            "本月与上月销售额对比如何？",
+            build_context(sql_result_message()),
+        )
+        self.assertEqual(decision.route, RouteType.DATABASE_QUERY)
+
+    def test_temporal_metric_question_without_query_verb_fetches_database(self):
+        router = DynamicIntentRouter()
+        for query in (
+            "今天订单量如何？",
+            "本季度利润怎么样？",
+            "最近客户数有什么变化？",
+        ):
+            with self.subTest(query=query):
+                decision = router.route(query, build_context())
+                self.assertEqual(decision.route, RouteType.DATABASE_QUERY)
+
 
 class FakePipeline:
     def __init__(self) -> None:

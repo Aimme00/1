@@ -98,6 +98,12 @@ class RuleBasedIntentClassifier:
         "总量",
         "同比",
         "环比",
+        "对比",
+        "相比",
+        "比较",
+        "变化",
+        "增长",
+        "下降",
         "图表",
         "折线图",
         "柱状图",
@@ -119,6 +125,23 @@ class RuleBasedIntentClassifier:
         "过去",
         "最近",
     )
+    BUSINESS_METRIC_TERMS = (
+        "销售额",
+        "销售量",
+        "销量",
+        "订单数",
+        "订单量",
+        "交易额",
+        "交易量",
+        "收入",
+        "利润",
+        "利率",
+        "客单价",
+        "用户数",
+        "客户数",
+        "转化率",
+        "退款率",
+    )
 
     def classify(
         self, query: str, context: ConversationMemoryContext
@@ -138,6 +161,18 @@ class RuleBasedIntentClassifier:
         knowledge = any(re.search(pattern, normalized) for pattern in self.KNOWLEDGE_PATTERNS)
         database_request = self._matches_any(normalized, self.DATABASE_TERMS)
         fresh_data = self._matches_any(normalized, self.FRESH_DATA_TERMS)
+        business_metric = self._matches_any(normalized, self.BUSINESS_METRIC_TERMS)
+
+        # 业务用户经常省略“查询/统计”等动词，例如“本月与上月销售额
+        # 对比如何”。只要同时包含时间范围和业务指标，就必然需要访问
+        # 数据库，不能因为措辞像普通问答而落入历史结果解释路径。
+        if fresh_data and business_metric:
+            return RouteDecision(
+                route=RouteType.DATABASE_QUERY,
+                confidence=0.98,
+                reason="问题包含明确时间范围和业务指标，需要查询当前数据",
+                signals=["fresh_data", "business_metric"],
+            )
 
         if fresh_data and database_request:
             return RouteDecision(
