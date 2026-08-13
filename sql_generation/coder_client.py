@@ -107,6 +107,7 @@ class CoderModelClient:
         真实效果以 Coder 模型输出为准。
         """
         operation = self._extract_operation(prompt)
+        is_postgres = "符合postgres语法" in "".join(prompt.lower().split())
 
         if "退款率" in operation and "orders.channel" in prompt:
             return """SELECT
@@ -123,7 +124,11 @@ GROUP BY orders.channel
 ORDER BY refund_rate DESC;"""
 
         if "异常倍数" in operation and "orders" in prompt:
-            return """SELECT
+            date_filter = (
+                "CURRENT_DATE - INTERVAL '59 days'"
+                if is_postgres else "date('now', '-59 day')"
+            )
+            return f"""SELECT
     daily.sales_date,
     daily.sales_amount,
     daily.order_count,
@@ -139,30 +144,37 @@ FROM (
     JOIN order_items
       ON orders.order_id = order_items.order_id
     WHERE orders.order_status = 'completed'
-      AND orders.order_date >= date('now', '-59 day')
+      AND orders.order_date >= {date_filter}
     GROUP BY orders.order_date
 ) AS daily
 ORDER BY anomaly_ratio DESC
 LIMIT 5;"""
 
         if "最近180天" in operation and "按月格式化" in operation and "orders" in prompt:
-            return """SELECT
-    strftime('%Y-%m', order_date) AS sales_month,
+            month_expr = "TO_CHAR(order_date, 'YYYY-MM')" if is_postgres else "strftime('%Y-%m', order_date)"
+            date_filter = "CURRENT_DATE - INTERVAL '179 days'" if is_postgres else "date('now', '-179 day')"
+            return f"""SELECT
+    {month_expr} AS sales_month,
     ROUND(SUM(sales_amount), 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= date('now', '-179 day')
-GROUP BY strftime('%Y-%m', order_date)
+  AND order_date >= {date_filter}
+GROUP BY {month_expr}
 ORDER BY sales_month ASC;"""
 
         if "按月格式化" in operation and "orders" in prompt:
-            return """SELECT
-    strftime('%Y-%m', order_date) AS sales_month,
+            month_expr = "TO_CHAR(order_date, 'YYYY-MM')" if is_postgres else "strftime('%Y-%m', order_date)"
+            date_filter = (
+                "DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'"
+                if is_postgres else "date('now', 'start of month', '-1 month')"
+            )
+            return f"""SELECT
+    {month_expr} AS sales_month,
     ROUND(SUM(sales_amount), 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= date('now', 'start of month', '-1 month')
-GROUP BY strftime('%Y-%m', order_date)
+  AND order_date >= {date_filter}
+GROUP BY {month_expr}
 ORDER BY sales_month ASC;"""
 
         if "筛选customers.region等于" in operation and "按商品汇总" in operation:
@@ -241,12 +253,13 @@ GROUP BY customers.region
 ORDER BY order_count DESC;"""
 
         if "最近30天" in operation and "orders.order_date" in prompt:
-            return """SELECT
+            date_filter = "CURRENT_DATE - INTERVAL '29 days'" if is_postgres else "date('now', '-29 day')"
+            return f"""SELECT
     order_date,
     ROUND(SUM(sales_amount), 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= date('now', '-29 day')
+  AND order_date >= {date_filter}
 GROUP BY order_date
 ORDER BY order_date ASC;"""
 

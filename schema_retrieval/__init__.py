@@ -26,6 +26,7 @@ from .embedding_client import (
 
 from .vector_index import VectorIndex
 from .mysql_loader import MySQLConnectionReport, MySQLSchemaLoader
+from .postgres_loader import PostgresConnectionReport, PostgresSchemaLoader
 
 from .rrf_fusion_client import (
     RRFFusionClient,
@@ -61,6 +62,8 @@ __all__ = [
     "VectorIndex",
     "MySQLConnectionReport",
     "MySQLSchemaLoader",
+    "PostgresConnectionReport",
+    "PostgresSchemaLoader",
     "RRFFusionClient",
     "RRFFusionConfig",
     "RouteRecallResult",

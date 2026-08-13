@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from askdata_memory import ConversationMemoryService, MemoryServiceConfig
+from askdata_memory import ConversationMemoryService, MemoryServiceConfig, PostgresMemoryStore
 from askdata_pipeline import AskDataText2SQLPipeline, DynamicAskDataService
 from askdata_pipeline.objects import AgentRunStatus
 
@@ -43,9 +44,17 @@ class AskDataApplicationService:
             except DataSourceUnavailableError:
                 pipeline = None
         self.pipeline = pipeline
-        self.memory = memory or ConversationMemoryService(
-            MemoryServiceConfig(db_path=runtime_path / "memory.db")
-        )
+        if memory is None:
+            database_url = (
+                os.getenv("ASKDATA_POSTGRES_URL", "").strip()
+                or os.getenv("POSTGRES_URL", "").strip()
+                or os.getenv("DATABASE_URL", "").strip()
+            )
+            memory = ConversationMemoryService(
+                MemoryServiceConfig(db_path=runtime_path / "memory.db"),
+                store=(PostgresMemoryStore(database_url) if database_url else None),
+            )
+        self.memory = memory
         self.dynamic_service = (
             DynamicAskDataService(self.pipeline, self.memory)
             if self.pipeline is not None

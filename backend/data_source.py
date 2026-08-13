@@ -12,8 +12,13 @@ from typing import Any, Dict, Optional
 from askdata_pipeline import AskDataText2SQLPipeline
 from askdata_pipeline.local_clients import LocalHashEmbeddingClient
 from askdata_pipeline.objects import PipelineConfig
-from mcp_router import MySQLExecutorConfig, MySQLQueryExecutor
-from schema_retrieval import MySQLSchemaLoader
+from mcp_router import (
+    MySQLExecutorConfig,
+    MySQLQueryExecutor,
+    PostgresExecutorConfig,
+    PostgresQueryExecutor,
+)
+from schema_retrieval import MySQLSchemaLoader, PostgresSchemaLoader
 from schema_retrieval.hybrid_schema_retrieval_service import (
     HybridSchemaRetrievalConfig,
     HybridSchemaRetrievalService,
@@ -38,8 +43,8 @@ class DataSourceSettings:
     @classmethod
     def from_environment(cls) -> "DataSourceSettings":
         database_type = os.getenv("ASKDATA_DATABASE_TYPE", "sqlite").strip().lower()
-        if database_type not in {"sqlite", "mysql"}:
-            raise ValueError("ASKDATA_DATABASE_TYPE 只支持 sqlite 或 mysql")
+        if database_type not in {"sqlite", "mysql", "postgres"}:
+            raise ValueError("ASKDATA_DATABASE_TYPE 只支持 sqlite、mysql 或 postgres")
         default_alias = (
             os.getenv("ASKDATA_MYSQL_DATABASE", "analytics")
             if database_type == "mysql"
@@ -48,7 +53,7 @@ class DataSourceSettings:
         enforce_setting = os.getenv("ASKDATA_ENFORCE_READONLY", "true").strip().lower()
         sqlglot_setting = os.getenv(
             "ASKDATA_REQUIRE_SQLGLOT",
-            "true" if database_type == "mysql" else "false",
+            "true" if database_type in {"mysql", "postgres"} else "false",
         ).strip().lower()
         return cls(
             database_type=database_type,
@@ -112,9 +117,9 @@ class DataSourceManager:
                 "warnings": [],
             }
 
-        loader = self._mysql_loader()
+        loader = self._mysql_loader() if self.settings.database_type == "mysql" else self._postgres_loader()
         report = loader.test_connection().to_dict()
-        report["database_type"] = "mysql"
+        report["database_type"] = self.settings.database_type
         return report
 
     def sync(self) -> Dict[str, Any]:
@@ -155,7 +160,7 @@ class DataSourceManager:
                 readonly_verified=True,
                 warnings=[],
             )
-        else:
+        elif self.settings.database_type == "mysql":
             loader = self._mysql_loader()
             report = loader.test_connection()
             if self.settings.enforce_readonly and not report.readonly_verified:
@@ -201,6 +206,54 @@ class DataSourceManager:
                 readonly_verified=report.readonly_verified,
                 warnings=list(report.warnings),
             )
+        else:
+            loader = self._postgres_loader()
+            report = loader.test_connection()
+            tables, columns, relations = loader.load()
+            business_meta = self._load_business_meta()
+            if not business_meta:
+                from askdata_pipeline.demo_data import get_trade_business_meta
+
+                business_meta = get_trade_business_meta()
+                loader.business_meta = business_meta
+                tables, columns, relations = loader.load()
+            retrieval = HybridSchemaRetrievalService(
+                tables=tables,
+                columns=columns,
+                relations=relations,
+                business_meta=business_meta,
+                embedding_client=LocalHashEmbeddingClient(dimensions=1024),
+                rerank_client=AliyunRerankClient(
+                    AliyunRerankConfig(api_key="", workspace_id="", model="qwen-rerank")
+                ),
+                keyword_extractor=None,
+                config=self._retrieval_config(),
+            )
+            postgres_config = PostgresExecutorConfig.from_env()
+            pipeline = AskDataText2SQLPipeline(
+                PipelineConfig(
+                    database_name=self.settings.database_alias,
+                    database_type="postgres",
+                    sql_dialect="postgres",
+                    bootstrap_demo_database=False,
+                    max_query_rows=postgres_config.max_rows,
+                    require_sqlglot=self.settings.require_sqlglot,
+                ),
+                schema_retrieval_service=retrieval,
+                query_executor=PostgresQueryExecutor(
+                    postgres_config,
+                    database_alias=self.settings.database_alias,
+                ),
+                business_meta=business_meta,
+            )
+            status = self._ready_status(
+                database=report.database,
+                table_count=len(tables),
+                column_count=len(columns),
+                relation_count=len(relations),
+                readonly_verified=report.readonly_verified,
+                warnings=list(report.warnings),
+            )
 
         with self._lock:
             self._pipeline = pipeline
@@ -212,6 +265,19 @@ class DataSourceManager:
             MySQLExecutorConfig.from_env(),
             database_name=self.settings.database_alias,
             business_meta=self._load_business_meta(),
+            sample_size=self.settings.schema_sample_size,
+        )
+
+    def _postgres_loader(self) -> PostgresSchemaLoader:
+        business_meta = self._load_business_meta()
+        if not business_meta:
+            from askdata_pipeline.demo_data import get_trade_business_meta
+
+            business_meta = get_trade_business_meta()
+        return PostgresSchemaLoader(
+            PostgresExecutorConfig.from_env(),
+            database_name=self.settings.database_alias,
+            business_meta=business_meta,
             sample_size=self.settings.schema_sample_size,
         )
 
@@ -229,7 +295,7 @@ class DataSourceManager:
     def _write_snapshot(self, tables, columns, relations) -> None:
         payload = {
             "schema_version": "1.0",
-            "database_type": "mysql",
+            "database_type": self.settings.database_type,
             "database": self.settings.database_alias,
             "synced_at": self._now(),
             "tables": [

@@ -25,6 +25,9 @@ from .data_source import DataSourceUnavailableError
 from .quota import DemoQuotaConfig, DemoQuotaExceededError, DemoQuotaService
 from .run_manager import RunNotFoundError
 from .service import AskDataApplicationService, RunAccessError, RunNotReadyError
+from .postgres_bootstrap import ensure_postgres_schema
+from .postgres_run_manager import PostgresRunManager
+from .signed_auth import SignedAuthConfig, SignedAuthService
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -70,6 +73,22 @@ def create_app(
     service: Optional[AskDataApplicationService] = None,
     auth_service: Optional[AuthService] = None,
 ) -> FastAPI:
+    postgres_url = (
+        os.getenv("ASKDATA_POSTGRES_URL", "").strip()
+        or os.getenv("POSTGRES_URL", "").strip()
+        or os.getenv("DATABASE_URL", "").strip()
+    )
+    if postgres_url:
+        ensure_postgres_schema(postgres_url)
+        if service is None:
+            service = AskDataApplicationService(
+                runtime_dir=RUNTIME_DIR,
+                run_manager=PostgresRunManager(postgres_url),
+            )
+        if auth_service is None and (
+            os.getenv("VERCEL") or os.getenv("ASKDATA_SESSION_SECRET")
+        ):
+            auth_service = SignedAuthService(SignedAuthConfig.from_environment())
     app = FastAPI(title="AskData Agent API", version="0.9.0")
     app.state.askdata = service or AskDataApplicationService(runtime_dir=RUNTIME_DIR)
     app.state.auth = auth_service or AuthService(AuthConfig.from_environment(RUNTIME_DIR))
@@ -96,7 +115,7 @@ def create_app(
         return {"status": "ok", "version": "0.9.0"}
 
     def request_subject(request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
         connecting_ip = request.headers.get("cf-connecting-ip", "").strip()
         client_ip = request.client.host if request.client else "unknown"
         return connecting_ip or forwarded or client_ip

@@ -438,3 +438,9 @@ Optional tester secret: ASKDATA_TEST_TOKEN
 公开体验默认按访客网络限制 2 次提问或钻取，项目所有者可通过 `ASKDATA_TEST_TOKEN` 开启不限次数测试模式。Render 免费实例闲置后会休眠且没有持久磁盘，因此重启后历史、仪表盘和访问计数会重置；内置演示数据库会自动重建。
 
 部署步骤见 [Render 免费部署指南](docs/Render免费部署指南.md)。
+# Vercel 完整 Python Agent 部署
+
+本项目已支持将完整 FastAPI Agent 部署到 Vercel，并使用 Neon PostgreSQL
+持久化业务数据、对话、保存分析、仪表盘、运行结果和公开体验额度。
+
+详细操作见：`docs/Vercel免费部署指南.md`。

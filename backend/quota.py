@@ -16,6 +16,7 @@ class DemoQuotaConfig:
     query_limit: int = 2
     tester_token: str = ""
     fingerprint_salt: str = "askdata-local-quota"
+    database_url: str = ""
 
     @classmethod
     def from_environment(cls, runtime_dir: str | Path) -> "DemoQuotaConfig":
@@ -31,6 +32,9 @@ class DemoQuotaConfig:
             fingerprint_salt=os.getenv(
                 "ASKDATA_QUOTA_SALT", "askdata-local-quota"
             ).strip(),
+            database_url=(os.getenv("ASKDATA_POSTGRES_URL", "").strip()
+                          or os.getenv("POSTGRES_URL", "").strip()
+                          or os.getenv("DATABASE_URL", "").strip()),
         )
 
 
@@ -45,6 +49,8 @@ class DemoQuotaService:
         self.config = config
         self.config.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        if self.config.database_url:
+            return
         with self._connect() as connection:
             connection.execute(
                 """
@@ -60,6 +66,13 @@ class DemoQuotaService:
         if self._is_tester(tester_token):
             return self._payload(used=0, unlimited=True)
         subject_hash = self._subject_hash(subject)
+        if self.config.database_url:
+            with self._pg_connect() as connection:
+                row = connection.execute(
+                    "SELECT query_count FROM _askdata_quota WHERE subject_hash = %s",
+                    (subject_hash,),
+                ).fetchone()
+            return self._payload(used=int(row[0]) if row else 0)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT query_count FROM demo_query_usage WHERE subject_hash = ?",
@@ -71,6 +84,22 @@ class DemoQuotaService:
         if self._is_tester(tester_token):
             return self._payload(used=0, unlimited=True)
         subject_hash = self._subject_hash(subject)
+        if self.config.database_url:
+            with self._pg_connect() as connection:
+                row = connection.execute(
+                    """INSERT INTO _askdata_quota(subject_hash,query_count,updated_at)
+                       VALUES (%s,1,NOW()) ON CONFLICT(subject_hash) DO UPDATE SET
+                         query_count=_askdata_quota.query_count+1,updated_at=NOW()
+                       WHERE _askdata_quota.query_count < %s
+                       RETURNING query_count""",
+                    (subject_hash, self.config.query_limit),
+                ).fetchone()
+                if row is None:
+                    raise DemoQuotaExceededError(
+                        f"本次公开体验的 {self.config.query_limit} 次提问已使用完"
+                    )
+                used = int(row[0])
+            return self._payload(used=used)
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
@@ -120,3 +149,8 @@ class DemoQuotaService:
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(str(self.config.db_path), timeout=30)
+
+    def _pg_connect(self):
+        import psycopg
+
+        return psycopg.connect(self.config.database_url)

@@ -50,7 +50,7 @@ class ConversationMemoryService:
         self,
         config: Optional[MemoryServiceConfig] = None,
         *,
-        store: Optional[SQLiteMemoryStore] = None,
+        store: Optional[object] = None,
         summarizer: Optional[MemorySummarizer] = None,
         embedding_client: Any = None,
         reranker: Optional[MemoryReranker] = None,

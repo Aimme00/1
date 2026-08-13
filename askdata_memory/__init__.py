@@ -14,6 +14,7 @@ from .objects import (
 )
 from .short_term import ShortTermMemoryConfig, ShortTermMemoryService
 from .storage import SQLiteMemoryStore
+from .postgres_storage import PostgresMemoryStore
 from .summarizer import ExtractiveMemorySummarizer, ModelMemorySummarizer
 from .reranker import AliyunMemoryReranker
 from .vector_store import MilvusLongTermMemoryConfig, MilvusLongTermVectorIndex
@@ -40,4 +41,5 @@ __all__ = [
     "ShortTermMemoryConfig",
     "ShortTermMemoryService",
     "SQLiteMemoryStore",
+    "PostgresMemoryStore",
 ]

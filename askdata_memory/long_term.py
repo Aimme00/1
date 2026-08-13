@@ -59,7 +59,7 @@ class LongTermMemoryService:
 
     def __init__(
         self,
-        store: SQLiteMemoryStore,
+        store: object,
         embedding_client: EmbeddingClient,
         summarizer: Optional[MemorySummarizer] = None,
         reranker: Optional[MemoryReranker] = None,

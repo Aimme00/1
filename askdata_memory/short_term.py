@@ -33,7 +33,7 @@ class ShortTermMemoryService:
 
     def __init__(
         self,
-        store: SQLiteMemoryStore,
+        store: object,
         summarizer: Optional[MemorySummarizer] = None,
         config: Optional[ShortTermMemoryConfig] = None,
     ):

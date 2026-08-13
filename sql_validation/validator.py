@@ -99,8 +99,15 @@ class SQLValidator:
             if (node_type := getattr(exp, name, None)) is not None
         )
         if forbidden_types and any(tree.find(node_type) for node_type in forbidden_types):
+            lowered = self._remove_comments(normalized_sql).lower()
+            matched_keywords = sorted(
+                keyword.upper()
+                for keyword in self.FORBIDDEN_KEYWORDS
+                if re.search(rf"\b{re.escape(keyword)}\b", lowered)
+            )
+            detail = "、".join(matched_keywords) or "写入、DDL 或管理语句"
             result.issues.append(
-                ValidationIssue("forbidden_statement", "SQL 包含写入、DDL 或管理语句。")
+                ValidationIssue("forbidden_keyword", f"SQL 包含禁止关键字：{detail}。")
             )
 
         joins = list(tree.find_all(exp.Join))
