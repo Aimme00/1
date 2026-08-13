@@ -98,6 +98,11 @@ class RuleBasedIntentClassifier:
         "总量",
         "同比",
         "环比",
+        "图表",
+        "折线图",
+        "柱状图",
+        "饼图",
+        "可视化",
     )
     FRESH_DATA_TERMS = (
         "重新查询",
@@ -266,9 +271,14 @@ class DynamicIntentRouter:
         self.fallback_classifier = fallback_classifier or RuleBasedIntentClassifier()
 
     def route(self, query: str, context: ConversationMemoryContext) -> RouteDecision:
+        # 明确的取数/统计/可视化请求必须查库。先用确定性规则兜底，避免
+        # 模型将“生成图表”误判为无需新数据的普通问答。
+        rule_decision = self.fallback_classifier.classify(query, context)
+        if rule_decision.route == RouteType.DATABASE_QUERY:
+            return rule_decision
         if self.model_classifier:
             try:
                 return self.model_classifier.classify(query, context)
             except (KeyError, TypeError, ValueError, RuntimeError, json.JSONDecodeError):
                 pass
-        return self.fallback_classifier.classify(query, context)
+        return rule_decision

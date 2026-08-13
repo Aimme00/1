@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from env_settings import env_text, production_environment
 
 @dataclass(frozen=True)
 class ModelProviderSettings:
@@ -21,28 +22,28 @@ def resolve_model_settings(
     model: str = "",
 ) -> ModelProviderSettings:
     """Resolve DeepSeek or DashScope settings without ever logging the secret."""
-    selected = (provider or os.getenv("ASKDATA_LLM_PROVIDER", "")).strip().lower()
+    selected = (provider or env_text("ASKDATA_LLM_PROVIDER")).strip().lower()
     if not selected:
-        selected = "deepseek" if os.getenv("DEEPSEEK_API_KEY") else "dashscope"
+        selected = "deepseek" if env_text("DEEPSEEK_API_KEY") else "dashscope"
     if selected not in {"deepseek", "dashscope"}:
         raise ValueError("ASKDATA_LLM_PROVIDER 仅支持 deepseek 或 dashscope。")
 
     role_name = "COT" if role.lower() == "cot" else "CODER"
     if selected == "deepseek":
-        resolved_key = api_key or os.getenv("DEEPSEEK_API_KEY", "")
-        resolved_url = base_url or os.getenv(
+        resolved_key = api_key or env_text("DEEPSEEK_API_KEY")
+        resolved_url = base_url or env_text(
             "DEEPSEEK_BASE_URL", "https://api.deepseek.com/chat/completions"
         )
-        resolved_model = model or os.getenv(
+        resolved_model = model or env_text(
             f"DEEPSEEK_{role_name}_MODEL", "deepseek-v4-flash"
         )
     else:
-        resolved_key = api_key or os.getenv("DASHSCOPE_API_KEY", "")
-        resolved_url = base_url or os.getenv(
+        resolved_key = api_key or env_text("DASHSCOPE_API_KEY")
+        resolved_url = base_url or env_text(
             "DASHSCOPE_BASE_URL",
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
         )
-        resolved_model = model or os.getenv(
+        resolved_model = model or env_text(
             f"DASHSCOPE_{role_name}_MODEL", "qwen-plus"
         )
     return ModelProviderSettings(
@@ -54,17 +55,17 @@ def resolve_model_settings(
 
 
 def has_model_api_key() -> bool:
-    selected = os.getenv("ASKDATA_LLM_PROVIDER", "").strip().lower()
+    selected = env_text("ASKDATA_LLM_PROVIDER").lower()
     if selected == "deepseek":
-        return bool(os.getenv("DEEPSEEK_API_KEY"))
+        return bool(env_text("DEEPSEEK_API_KEY"))
     if selected == "dashscope":
-        return bool(os.getenv("DASHSCOPE_API_KEY"))
-    return bool(os.getenv("DEEPSEEK_API_KEY") or os.getenv("DASHSCOPE_API_KEY"))
+        return bool(env_text("DASHSCOPE_API_KEY"))
+    return bool(env_text("DEEPSEEK_API_KEY") or env_text("DASHSCOPE_API_KEY"))
 
 
 def allow_mock_model() -> bool:
     """Local development may use deterministic mocks; production fails closed by default."""
-    configured = os.getenv("ASKDATA_ALLOW_MOCK_MODEL", "").strip().lower()
+    configured = env_text("ASKDATA_ALLOW_MOCK_MODEL").lower()
     if configured:
         return configured in {"1", "true", "yes", "on"}
-    return os.getenv("ASKDATA_ENV", "development").strip().lower() != "production"
+    return not production_environment()

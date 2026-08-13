@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
+from env_settings import env_int, env_text
 from .objects import MCPExecutionRequest, MCPExecutionResult
 from .readonly_guard import is_obviously_readonly_sql
 
@@ -25,23 +26,23 @@ class MySQLExecutorConfig:
     @classmethod
     def from_env(cls, prefix: str = "ASKDATA_MYSQL_") -> "MySQLExecutorConfig":
         values = {
-            "host": os.getenv(f"{prefix}HOST", ""),
-            "user": os.getenv(f"{prefix}USER", ""),
-            "password": os.getenv(f"{prefix}PASSWORD", ""),
-            "database": os.getenv(f"{prefix}DATABASE", ""),
+            "host": env_text(f"{prefix}HOST"),
+            "user": env_text(f"{prefix}USER"),
+            "password": env_text(f"{prefix}PASSWORD", strip=False),
+            "database": env_text(f"{prefix}DATABASE"),
         }
         missing = [name for name, value in values.items() if not value]
         if missing:
             raise ValueError(f"缺少 MySQL 环境变量：{', '.join(missing)}")
         return cls(
             **values,
-            port=int(os.getenv(f"{prefix}PORT", "3306")),
-            connect_timeout=int(os.getenv(f"{prefix}CONNECT_TIMEOUT", "10")),
-            read_timeout=int(os.getenv(f"{prefix}READ_TIMEOUT", "30")),
-            max_execution_time_ms=int(
-                os.getenv(f"{prefix}MAX_EXECUTION_TIME_MS", "30000")
+            port=env_int(f"{prefix}PORT", 3306, minimum=1, maximum=65535),
+            connect_timeout=env_int(f"{prefix}CONNECT_TIMEOUT", 10, minimum=1),
+            read_timeout=env_int(f"{prefix}READ_TIMEOUT", 30, minimum=1),
+            max_execution_time_ms=env_int(
+                f"{prefix}MAX_EXECUTION_TIME_MS", 30_000, minimum=1, maximum=300_000
             ),
-            max_rows=int(os.getenv(f"{prefix}MAX_ROWS", "5000")),
+            max_rows=env_int(f"{prefix}MAX_ROWS", 5000, minimum=1, maximum=20_000),
         )
 
 

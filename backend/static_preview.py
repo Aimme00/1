@@ -5,6 +5,8 @@ import mimetypes
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+from env_settings import env_int, env_text
 from urllib.parse import urlparse
 
 
@@ -70,8 +72,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    host = os.getenv("ASKDATA_HOST", "127.0.0.1")
-    port = int(os.getenv("ASKDATA_PORT", "8000"))
+    host = env_text("ASKDATA_HOST", "127.0.0.1")
+    port = env_int("ASKDATA_PORT", 8000, minimum=1, maximum=65535)
     server = ThreadingHTTPServer((host, port), PreviewHandler)
     print(f"AskData static preview: http://{host}:{port}", flush=True)
     server.serve_forever()

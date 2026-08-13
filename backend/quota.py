@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
+from env_settings import env_int, env_text, postgres_url
 
 @dataclass(frozen=True)
 class DemoQuotaConfig:
@@ -20,21 +21,16 @@ class DemoQuotaConfig:
 
     @classmethod
     def from_environment(cls, runtime_dir: str | Path) -> "DemoQuotaConfig":
-        raw_limit = os.getenv("ASKDATA_GUEST_QUERY_LIMIT", "2")
-        try:
-            limit = int(raw_limit)
-        except ValueError as exc:
-            raise ValueError("ASKDATA_GUEST_QUERY_LIMIT 必须是整数") from exc
+        limit = env_int("ASKDATA_GUEST_QUERY_LIMIT", 2, minimum=1, maximum=100)
         return cls(
             db_path=Path(runtime_dir) / "demo_quota.db",
-            query_limit=max(1, min(limit, 100)),
-            tester_token=os.getenv("ASKDATA_TEST_TOKEN", "").strip(),
-            fingerprint_salt=os.getenv(
-                "ASKDATA_QUOTA_SALT", "askdata-local-quota"
-            ).strip(),
-            database_url=(os.getenv("ASKDATA_POSTGRES_URL", "").strip()
-                          or os.getenv("POSTGRES_URL", "").strip()
-                          or os.getenv("DATABASE_URL", "").strip()),
+            query_limit=limit,
+            tester_token=env_text("ASKDATA_TEST_TOKEN"),
+            fingerprint_salt=env_text(
+                "ASKDATA_QUOTA_SALT",
+                env_text("ASKDATA_SESSION_SECRET", "askdata-local-quota"),
+            ),
+            database_url=postgres_url(),
         )
 
 

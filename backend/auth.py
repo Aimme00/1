@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
+from env_settings import env_bool, env_int, env_text, production_environment
 
 class AuthenticationError(ValueError):
     """邮箱或密码不正确。"""
@@ -62,12 +63,11 @@ class AuthConfig:
 
     @classmethod
     def from_environment(cls, runtime_dir: str | Path) -> "AuthConfig":
-        environment = os.getenv("ASKDATA_ENV", "development").strip().lower()
-        is_production = environment == "production"
-        bootstrap_email = os.getenv("ASKDATA_BOOTSTRAP_EMAIL", "").strip()
-        bootstrap_password = os.getenv("ASKDATA_BOOTSTRAP_PASSWORD", "")
-        bootstrap_display_name = os.getenv("ASKDATA_BOOTSTRAP_DISPLAY_NAME", "").strip()
-        cookie_setting = os.getenv("ASKDATA_COOKIE_SECURE", "").strip().lower()
+        is_production = production_environment()
+        environment = "production" if is_production else "development"
+        bootstrap_email = env_text("ASKDATA_BOOTSTRAP_EMAIL")
+        bootstrap_password = env_text("ASKDATA_BOOTSTRAP_PASSWORD", strip=False)
+        bootstrap_display_name = env_text("ASKDATA_BOOTSTRAP_DISPLAY_NAME")
         if not is_production:
             bootstrap_email = bootstrap_email or "demo@askdata.local"
             bootstrap_password = bootstrap_password or "askdata-demo"
@@ -75,14 +75,10 @@ class AuthConfig:
         return cls(
             db_path=Path(runtime_dir) / "auth.db",
             environment=environment,
-            session_ttl_seconds=max(
-                300, int(os.getenv("ASKDATA_SESSION_TTL_SECONDS", str(24 * 60 * 60)))
+            session_ttl_seconds=env_int(
+                "ASKDATA_SESSION_TTL_SECONDS", 24 * 60 * 60, minimum=300
             ),
-            cookie_secure=(
-                is_production
-                if not cookie_setting
-                else cookie_setting in {"1", "true", "yes", "on"}
-            ),
+            cookie_secure=env_bool("ASKDATA_COOKIE_SECURE", is_production),
             bootstrap_email=bootstrap_email,
             bootstrap_password=bootstrap_password,
             bootstrap_display_name=bootstrap_display_name,

@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
+from env_settings import env_int, postgres_url
 from .objects import MCPExecutionRequest, MCPExecutionResult
 from .readonly_guard import is_obviously_readonly_sql
 
@@ -18,21 +19,23 @@ class PostgresExecutorConfig:
 
     @classmethod
     def from_env(cls) -> "PostgresExecutorConfig":
-        database_url = (
-            os.getenv("ASKDATA_POSTGRES_URL", "").strip()
-            or os.getenv("POSTGRES_URL", "").strip()
-            or os.getenv("DATABASE_URL", "").strip()
-        )
+        database_url = postgres_url()
         if not database_url:
             raise ValueError("缺少 PostgreSQL 环境变量：ASKDATA_POSTGRES_URL 或 DATABASE_URL")
         return cls(
             database_url=database_url,
-            connect_timeout=max(1, int(os.getenv("ASKDATA_POSTGRES_CONNECT_TIMEOUT", "10"))),
-            statement_timeout_ms=max(
-                1,
-                min(int(os.getenv("ASKDATA_POSTGRES_STATEMENT_TIMEOUT_MS", "30000")), 300_000),
+            connect_timeout=env_int(
+                "ASKDATA_POSTGRES_CONNECT_TIMEOUT", 10, minimum=1, maximum=60
             ),
-            max_rows=max(1, min(int(os.getenv("ASKDATA_POSTGRES_MAX_ROWS", "5000")), 20_000)),
+            statement_timeout_ms=env_int(
+                "ASKDATA_POSTGRES_STATEMENT_TIMEOUT_MS",
+                30_000,
+                minimum=1,
+                maximum=300_000,
+            ),
+            max_rows=env_int(
+                "ASKDATA_POSTGRES_MAX_ROWS", 5000, minimum=1, maximum=20_000
+            ),
         )
 
 

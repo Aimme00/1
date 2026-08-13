@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from env_settings import postgres_url
 from askdata_memory import ConversationMemoryService, MemoryServiceConfig, PostgresMemoryStore
 from askdata_pipeline import AskDataText2SQLPipeline, DynamicAskDataService
 from askdata_pipeline.objects import AgentRunStatus
@@ -45,11 +46,7 @@ class AskDataApplicationService:
                 pipeline = None
         self.pipeline = pipeline
         if memory is None:
-            database_url = (
-                os.getenv("ASKDATA_POSTGRES_URL", "").strip()
-                or os.getenv("POSTGRES_URL", "").strip()
-                or os.getenv("DATABASE_URL", "").strip()
-            )
+            database_url = postgres_url()
             memory = ConversationMemoryService(
                 MemoryServiceConfig(db_path=runtime_path / "memory.db"),
                 store=(PostgresMemoryStore(database_url) if database_url else None),

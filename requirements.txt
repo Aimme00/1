@@ -1,3 +1,4 @@
+# Vercel 的 FastAPI 构建器要求此文件直接列出依赖，不能使用 -r 引用。
 fastapi>=0.115,<1.0
 uvicorn>=0.34,<1.0
 pydantic>=2.10,<3.0

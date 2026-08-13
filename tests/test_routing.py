@@ -64,6 +64,13 @@ class InvalidModelClient:
         return "这不是合法 JSON"
 
 
+class VisualizationRoutingTestCase(unittest.TestCase):
+    def test_explicit_chart_request_fetches_required_data(self):
+        router = DynamicIntentRouter()
+        decision = router.route("请生成最近30天销售额折线图", build_context())
+        self.assertEqual(decision.route, RouteType.DATABASE_QUERY)
+
+
 class FakePipeline:
     def __init__(self) -> None:
         self.call_count = 0

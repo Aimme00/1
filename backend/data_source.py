@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from env_settings import env_bool, env_int, env_text, postgres_url
 from askdata_pipeline import AskDataText2SQLPipeline
 from askdata_pipeline.local_clients import LocalHashEmbeddingClient
 from askdata_pipeline.objects import PipelineConfig
@@ -42,29 +43,27 @@ class DataSourceSettings:
 
     @classmethod
     def from_environment(cls) -> "DataSourceSettings":
-        database_type = os.getenv("ASKDATA_DATABASE_TYPE", "sqlite").strip().lower()
+        database_type = env_text(
+            "ASKDATA_DATABASE_TYPE", "postgres" if postgres_url() else "sqlite"
+        ).lower()
         if database_type not in {"sqlite", "mysql", "postgres"}:
             raise ValueError("ASKDATA_DATABASE_TYPE 只支持 sqlite、mysql 或 postgres")
         default_alias = (
-            os.getenv("ASKDATA_MYSQL_DATABASE", "analytics")
+            env_text("ASKDATA_MYSQL_DATABASE", "analytics")
             if database_type == "mysql"
             else "trade_db"
         )
-        enforce_setting = os.getenv("ASKDATA_ENFORCE_READONLY", "true").strip().lower()
-        sqlglot_setting = os.getenv(
-            "ASKDATA_REQUIRE_SQLGLOT",
-            "true" if database_type in {"mysql", "postgres"} else "false",
-        ).strip().lower()
         return cls(
             database_type=database_type,
-            database_alias=os.getenv("ASKDATA_DATABASE_ALIAS", default_alias).strip()
-            or default_alias,
-            schema_sample_size=max(
-                0, min(int(os.getenv("ASKDATA_SCHEMA_SAMPLE_SIZE", "0")), 10)
+            database_alias=env_text("ASKDATA_DATABASE_ALIAS", default_alias),
+            schema_sample_size=env_int(
+                "ASKDATA_SCHEMA_SAMPLE_SIZE", 0, minimum=0, maximum=10
             ),
-            enforce_readonly=enforce_setting in {"1", "true", "yes", "on"},
-            require_sqlglot=sqlglot_setting in {"1", "true", "yes", "on"},
-            business_meta_path=os.getenv("ASKDATA_BUSINESS_META_PATH", "").strip(),
+            enforce_readonly=env_bool("ASKDATA_ENFORCE_READONLY", True),
+            require_sqlglot=env_bool(
+                "ASKDATA_REQUIRE_SQLGLOT", database_type in {"mysql", "postgres"}
+            ),
+            business_meta_path=env_text("ASKDATA_BUSINESS_META_PATH"),
         )
 
 

@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from env_settings import env_text, postgres_url, runtime_dir, validate_vercel_environment
 from reporting import export_csv, export_xlsx
 
 from .auth import (
@@ -32,7 +33,7 @@ from .signed_auth import SignedAuthConfig, SignedAuthService
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 WEB_DIR = BASE_DIR / "web"
-RUNTIME_DIR = Path(os.getenv("ASKDATA_RUNTIME_DIR", BASE_DIR / "runtime_data"))
+RUNTIME_DIR = runtime_dir(BASE_DIR)
 
 
 class ChatRequest(BaseModel):
@@ -73,20 +74,17 @@ def create_app(
     service: Optional[AskDataApplicationService] = None,
     auth_service: Optional[AuthService] = None,
 ) -> FastAPI:
-    postgres_url = (
-        os.getenv("ASKDATA_POSTGRES_URL", "").strip()
-        or os.getenv("POSTGRES_URL", "").strip()
-        or os.getenv("DATABASE_URL", "").strip()
-    )
-    if postgres_url:
-        ensure_postgres_schema(postgres_url)
+    validate_vercel_environment()
+    database_url = postgres_url()
+    if database_url:
+        ensure_postgres_schema(database_url)
         if service is None:
             service = AskDataApplicationService(
                 runtime_dir=RUNTIME_DIR,
-                run_manager=PostgresRunManager(postgres_url),
+                run_manager=PostgresRunManager(database_url),
             )
         if auth_service is None and (
-            os.getenv("VERCEL") or os.getenv("ASKDATA_SESSION_SECRET")
+            env_text("VERCEL") or env_text("ASKDATA_SESSION_SECRET")
         ):
             auth_service = SignedAuthService(SignedAuthConfig.from_environment())
     app = FastAPI(title="AskData Agent API", version="0.9.0")
@@ -95,7 +93,7 @@ def create_app(
     app.state.quota = DemoQuotaService(DemoQuotaConfig.from_environment(RUNTIME_DIR))
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[origin.strip() for origin in os.getenv(
+        allow_origins=[origin.strip() for origin in env_text(
             "ASKDATA_CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
         ).split(",") if origin.strip()],
         allow_credentials=True,
@@ -169,6 +167,23 @@ def create_app(
             raise HTTPException(status_code=429, detail=str(exc))
         except AuthenticationError:
             raise HTTPException(status_code=401, detail="邮箱或密码错误")
+        response.set_cookie(
+            key=app.state.auth.config.cookie_name,
+            value=token,
+            max_age=app.state.auth.config.session_ttl_seconds,
+            httponly=True,
+            secure=app.state.auth.config.cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+        return {"user": user.to_dict()}
+
+    @app.post("/api/auth/guest")
+    def guest_login(response: Response):
+        issue_guest = getattr(app.state.auth, "issue_guest", None)
+        if issue_guest is None:
+            raise HTTPException(status_code=404, detail="当前环境未开启公开访客体验")
+        user, token = issue_guest()
         response.set_cookie(
             key=app.state.auth.config.cookie_name,
             value=token,

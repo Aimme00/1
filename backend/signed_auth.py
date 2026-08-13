@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from env_settings import env_int, env_text
 from .auth import (
     AuthUser,
     AuthenticationError,
@@ -32,21 +33,21 @@ class SignedAuthConfig:
 
     @classmethod
     def from_environment(cls) -> "SignedAuthConfig":
-        email = os.getenv("ASKDATA_BOOTSTRAP_EMAIL", "").strip().lower()
-        password = os.getenv("ASKDATA_BOOTSTRAP_PASSWORD", "")
-        secret = os.getenv("ASKDATA_SESSION_SECRET", "").strip()
-        if not email or not password:
-            raise InvalidBootstrapUserError("Vercel 部署必须配置登录邮箱和密码")
-        if len(password) < 8:
+        email = env_text("ASKDATA_BOOTSTRAP_EMAIL", "guest@askdata.demo").lower()
+        password = env_text("ASKDATA_BOOTSTRAP_PASSWORD", strip=False)
+        secret = env_text("ASKDATA_SESSION_SECRET")
+        if password and len(password) < 8:
             raise InvalidBootstrapUserError("登录密码至少需要 8 个字符")
         if len(secret) < 32:
             raise InvalidBootstrapUserError("ASKDATA_SESSION_SECRET 至少需要 32 个字符")
         return cls(
             email=email,
             password=password,
-            display_name=os.getenv("ASKDATA_BOOTSTRAP_DISPLAY_NAME", "Interview Demo").strip(),
+            display_name=env_text("ASKDATA_BOOTSTRAP_DISPLAY_NAME", "Interview Demo"),
             secret=secret,
-            session_ttl_seconds=max(300, int(os.getenv("ASKDATA_SESSION_TTL_SECONDS", "86400"))),
+            session_ttl_seconds=env_int(
+                "ASKDATA_SESSION_TTL_SECONDS", 86_400, minimum=300
+            ),
         )
 
 
@@ -60,17 +61,35 @@ class SignedAuthService:
     def login(self, *, email: str, password: str, source: str = "unknown"):
         key = f"{source}:{email.strip().lower()}"
         self._check(key)
-        email_ok = hmac.compare_digest(email.strip().lower(), self.config.email)
-        password_ok = hmac.compare_digest(password, self.config.password)
+        email_ok = bool(self.config.password) and hmac.compare_digest(
+            email.strip().lower(), self.config.email
+        )
+        password_ok = bool(self.config.password) and hmac.compare_digest(
+            password, self.config.password
+        )
         if not email_ok or not password_ok:
             self._failed.setdefault(key, []).append(time.monotonic())
             raise AuthenticationError("邮箱或密码错误")
         self._failed.pop(key, None)
+        return self._issue_user(is_admin=True)
+
+    def issue_guest(self):
+        """为公开体验签发隔离的访客会话，不暴露共享密码。"""
+        return self._issue_user(is_admin=False)
+
+    def _issue_user(self, *, is_admin: bool):
         now = int(time.time())
-        # 公开体验共用登录凭据，但每次登录生成独立用户空间，避免不同访客
-        # 互相看到会话、保存分析和仪表盘。
-        user = self._user(f"user_guest_{uuid.uuid4().hex}", now)
-        payload = {"sub": user.id, "iat": now, "exp": now + self.config.session_ttl_seconds}
+        user = self._user(
+            f"user_guest_{uuid.uuid4().hex}",
+            now,
+            is_admin=is_admin,
+        )
+        payload = {
+            "sub": user.id,
+            "iat": now,
+            "exp": now + self.config.session_ttl_seconds,
+            "adm": is_admin,
+        }
         encoded = self._encode(json.dumps(payload, separators=(",", ":")).encode())
         signature = self._sign(encoded)
         return user, f"{encoded}.{signature}"
@@ -85,7 +104,11 @@ class SignedAuthService:
             issued_at = int(payload.get("iat", 0))
             if not user_id.startswith("user_guest_") or int(payload.get("exp", 0)) <= int(time.time()):
                 return None
-            return self._user(user_id, issued_at)
+            return self._user(
+                user_id,
+                issued_at,
+                is_admin=bool(payload.get("adm", False)),
+            )
         except Exception:
             return None
 
@@ -103,13 +126,13 @@ class SignedAuthService:
         digest = hmac.new(self.config.secret.encode(), encoded.encode(), hashlib.sha256).digest()
         return self._encode(digest)
 
-    def _user(self, user_id: str, created_at: int) -> AuthUser:
+    def _user(self, user_id: str, created_at: int, *, is_admin: bool) -> AuthUser:
         return AuthUser(
             id=user_id,
             email=self.config.email,
             display_name=self.config.display_name or self.config.email.split("@", 1)[0],
             is_active=True,
-            is_admin=True,
+            is_admin=is_admin,
             created_at=created_at,
         )
 
