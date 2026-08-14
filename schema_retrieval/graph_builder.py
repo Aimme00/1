@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Dict, List
+from collections import defaultdict, deque
+from typing import Dict, List, Set
 
 from .objects import ColumnSchema, SchemaGraph, SchemaHit, TableRelation, TableSchema
 
@@ -27,6 +27,14 @@ def build_schema_graph(
     """
 
     selected_tables = {hit.column.table_name for hit in hits}
+
+    # 将检索命中的表通过最短关联路径连成可执行子图。复杂分析往往只直接命中
+    # 两端维度（例如 customers.region 与 products.product_name），但 SQL 必须
+    # 经过 orders、order_items 才能正确 JOIN。缺少中间表会导致模型生成了合法
+    # 业务 SQL，却在字段白名单阶段被误判为越权。
+    selected_tables.update(
+        _relation_path_closure(selected_tables, relations)
+    )
 
     selected_columns = defaultdict(dict)
 
@@ -90,6 +98,41 @@ def build_schema_graph(
         columns=graph_columns,
         relations=selected_relations,
     )
+
+
+def _relation_path_closure(
+    selected_tables: Set[str],
+    relations: List[TableRelation],
+) -> Set[str]:
+    """返回连接已命中表所需的最短路径中间表。"""
+    if len(selected_tables) < 2:
+        return set()
+
+    adjacency: Dict[str, Set[str]] = defaultdict(set)
+    for relation in relations:
+        adjacency[relation.source_table].add(relation.target_table)
+        adjacency[relation.target_table].add(relation.source_table)
+
+    anchors = sorted(selected_tables)
+    closure: Set[str] = set(selected_tables)
+    root = anchors[0]
+
+    for target in anchors[1:]:
+        queue = deque([(root, [root])])
+        visited = {root}
+        path: List[str] = []
+        while queue:
+            current, current_path = queue.popleft()
+            if current == target:
+                path = current_path
+                break
+            for neighbor in sorted(adjacency.get(current, set())):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, current_path + [neighbor]))
+        closure.update(path)
+
+    return closure
 
 
 def _find_column(

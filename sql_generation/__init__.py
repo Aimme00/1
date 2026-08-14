@@ -12,6 +12,7 @@ from .schema_store import LocalSchemaStore
 from .prompt_builder import SqlPromptBuilder
 from .coder_client import CoderModelClient, CoderModelConfig
 from .sql_generator import SqlGenerator
+from .dialect_normalizer import normalize_sql_for_dialect
 
 __all__ = [
     "CotStep",
@@ -27,4 +28,5 @@ __all__ = [
     "CoderModelClient",
     "CoderModelConfig",
     "SqlGenerator",
+    "normalize_sql_for_dialect",
 ]

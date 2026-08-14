@@ -31,6 +31,7 @@ class PipelineConfig:
     bootstrap_demo_database: bool = True
     max_query_rows: int = 5000
     max_sql_repair_attempts: int = 2
+    max_execution_repair_attempts: int = 1
     require_sqlglot: bool = False
     auto_generate_charts: bool = False
 

@@ -15,6 +15,8 @@ from askdata_pipeline import (
 )
 from mcp_router import (
     MCPExecutionRequest,
+    MCPExecutionResult,
+    MCPRouter,
     MySQLExecutorConfig,
     SQLiteMCPExecutor,
 )
@@ -210,6 +212,125 @@ WHERE trade_summary.total_trade_count > 50000"""
         self.assertEqual(len(result.step_logs[0].sql_attempts), 2)
         self.assertTrue(result.step_logs[0].execution_result["success"])
         self.assertIn("LIMIT 100", result.generated_sql.upper())
+
+    def test_pipeline_repairs_postgres_execution_error_and_retries(self) -> None:
+        class SequenceGenerator:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.corrections: list[str] = []
+
+            def generate(self, cot_step, sql_dialect="postgres", correction_context=""):
+                self.calls += 1
+                self.corrections.append(correction_context)
+                sql = (
+                    "SELECT ROUND(SUM(sales_amount), 2) AS sales_amount FROM orders"
+                    if self.calls == 1
+                    else "SELECT CAST(SUM(sales_amount) AS NUMERIC) AS sales_amount FROM orders"
+                )
+                return SqlGenerationResult(
+                    database=cot_step.database,
+                    prompt=correction_context,
+                    raw_output=sql,
+                    sql=sql,
+                )
+
+        class FailingOnceExecutor:
+            database = "trade_db"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def execute(self, request):
+                self.calls += 1
+                if self.calls == 1:
+                    return MCPExecutionResult(
+                        database=request.database,
+                        sql=request.sql,
+                        success=False,
+                        error=(
+                            "function round(double precision, integer) does not exist; "
+                            "postgresql://owner:secret@example.test/db"
+                        ),
+                    )
+                return MCPExecutionResult(
+                    database=request.database,
+                    sql=request.sql,
+                    success=True,
+                    columns=["sales_amount"],
+                    rows=[{"sales_amount": 123.45}],
+                    row_count=1,
+                )
+
+        generator = SequenceGenerator()
+        executor = FailingOnceExecutor()
+        router = MCPRouter()
+        router.register_executor("trade_db", executor)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pipeline = AskDataText2SQLPipeline(
+                PipelineConfig(
+                    db_path=Path(temp_dir) / "trade.db",
+                    sql_dialect="postgres",
+                    max_sql_repair_attempts=0,
+                    max_execution_repair_attempts=1,
+                    require_sqlglot=False,
+                ),
+                mcp_router=router,
+                sql_generator_factory=lambda schema_store: generator,
+            )
+            result = pipeline.run("最近30天销售额趋势")
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED, result.error)
+        self.assertEqual(executor.calls, 2)
+        self.assertEqual(generator.calls, 2)
+        self.assertIn("function round", generator.corrections[-1])
+        self.assertNotIn("owner:secret", generator.corrections[-1])
+        self.assertEqual(result.step_logs[0].sql_attempts[-1]["trigger"], "execution_error")
+
+    def test_pipeline_stops_after_execution_repair_budget(self) -> None:
+        class AlwaysSqlGenerator:
+            def generate(self, cot_step, sql_dialect="postgres", correction_context=""):
+                sql = "SELECT SUM(sales_amount) AS sales_amount FROM orders"
+                return SqlGenerationResult(
+                    database=cot_step.database,
+                    prompt=correction_context,
+                    raw_output=sql,
+                    sql=sql,
+                )
+
+        class AlwaysFailingExecutor:
+            database = "trade_db"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def execute(self, request):
+                self.calls += 1
+                return MCPExecutionResult(
+                    database=request.database,
+                    sql=request.sql,
+                    success=False,
+                    error="database error",
+                )
+
+        executor = AlwaysFailingExecutor()
+        router = MCPRouter()
+        router.register_executor("trade_db", executor)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            pipeline = AskDataText2SQLPipeline(
+                PipelineConfig(
+                    db_path=Path(temp_dir) / "trade.db",
+                    sql_dialect="postgres",
+                    max_sql_repair_attempts=0,
+                    max_execution_repair_attempts=1,
+                    require_sqlglot=False,
+                ),
+                mcp_router=router,
+                sql_generator_factory=lambda schema_store: AlwaysSqlGenerator(),
+            )
+            result = pipeline.run("最近30天销售额趋势")
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(executor.calls, 2)
 
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ class HybridSchemaRetrievalConfig:
     )
     """RRF 融合配置。"""
 
-    rerank_top_multiplier: int = 2
+    rerank_top_multiplier: int = 6
     """
     Rerank 输出数量倍数。
 
@@ -84,7 +84,7 @@ class HybridSchemaRetrievalConfig:
         rerank_top_n = 关键词数量 * rerank_top_multiplier
     """
 
-    rerank_min_top_n: int = 2
+    rerank_min_top_n: int = 12
     """Rerank 输出数量下限。"""
 
     rerank_max_top_n: int = 20

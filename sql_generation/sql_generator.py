@@ -49,7 +49,7 @@ class SqlGenerator:
         prompt = self.prompt_builder.build(request)
         if correction_context.strip():
             prompt += (
-                "\n\n上一次生成的 SQL 未通过校验。请根据以下错误重新生成完整 SQL，"
+                "\n\n上一次生成的 SQL 需要修正。请根据以下错误重新生成完整 SQL，"
                 "不要解释，只输出修正后的 SQL：\n"
                 f"{correction_context.strip()}"
             )

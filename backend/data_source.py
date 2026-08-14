@@ -399,8 +399,8 @@ class DataSourceManager:
                 final_top_k=20,
                 route_weights={"keyword": 1.0, "vector": 1.0},
             ),
-            rerank_top_multiplier=2,
-            rerank_min_top_n=2,
+            rerank_top_multiplier=6,
+            rerank_min_top_n=12,
             rerank_max_top_n=20,
         )
 

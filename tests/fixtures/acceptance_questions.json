@@ -1,0 +1,22 @@
+[
+  {"id": 1, "mode": "real", "question": "本月与上月销售额对比如何？", "category": "时间对比", "expect": "completed", "columns_any": ["sales_month", "sales_amount"]},
+  {"id": 2, "mode": "real", "question": "请统计最近30天每日销售额趋势并生成折线图", "category": "趋势图", "expect": "completed", "columns_any": ["order_date", "sales_date", "sales_amount"], "chart": true},
+  {"id": 3, "mode": "real", "question": "按区域统计已完成订单的订单量并降序排名", "category": "区域排名", "expect": "completed", "columns_any": ["region", "order_count"]},
+  {"id": 4, "mode": "real", "question": "查看销售额最高的前5个商品，输出商品名称和销售额", "category": "TopN", "expect": "completed", "columns_any": ["product_name", "sales_amount"]},
+  {"id": 5, "mode": "real", "question": "分析华东地区各商品已完成订单的销售额排名", "category": "多表关联", "expect": "completed", "columns_any": ["product_name", "sales_amount"]},
+  {"id": 6, "mode": "real", "question": "智能手机 Pro 在各区域的销售额分布如何？", "category": "商品与区域", "expect": "completed", "columns_any": ["region", "sales_amount"]},
+  {"id": 7, "mode": "real", "question": "各渠道的订单数、退款订单数和退款率分别是多少？", "category": "比率", "expect": "completed", "columns_any": ["channel", "order_count", "refund_count", "refund_rate"]},
+  {"id": 8, "mode": "real", "question": "找出最近60天销售额异常的前5个日期，展示销售额、订单数、销量和异常倍数", "category": "异常描述", "expect": "completed", "columns_any": ["sales_date", "sales_amount", "order_count", "total_quantity", "anomaly_ratio"], "columns_all": ["sales_date", "sales_amount", "order_count", "total_quantity", "anomaly_ratio"]},
+  {"id": 9, "mode": "real", "question": "查询累计交易笔数大于50000的用户对应年化利率", "category": "交易与利率关联", "expect": "completed", "columns_any": ["interest_rate"]},
+  {"id": 10, "mode": "real", "question": "统计最近180天每月已完成订单销售额，按月份升序展示并生成柱状图", "category": "月度聚合", "expect": "completed", "columns_any": ["sales_month", "sales_amount"], "chart": true},
+  {"id": 11, "mode": "deterministic", "question": "本月与上月销售额对比如何？", "category": "方言回归", "expect": "completed"},
+  {"id": 12, "mode": "deterministic", "question": "最近30天每日销售额趋势", "category": "日趋势", "expect": "completed"},
+  {"id": 13, "mode": "deterministic", "question": "销售额前5的商品", "category": "TopN", "expect": "completed"},
+  {"id": 14, "mode": "deterministic", "question": "按区域统计已完成订单的订单量排名", "category": "区域排名", "expect": "completed"},
+  {"id": 15, "mode": "deterministic", "question": "各渠道退款率", "category": "退款率", "expect": "completed"},
+  {"id": 16, "mode": "deterministic", "question": "找出销售额异常的日期", "category": "异常", "expect": "completed"},
+  {"id": 17, "mode": "deterministic", "question": "分析华南地区各商品销售额", "category": "地区商品", "expect": "completed"},
+  {"id": 18, "mode": "deterministic", "question": "智能手机 Pro 在各区域的销售额", "category": "商品地区", "expect": "completed"},
+  {"id": 19, "mode": "deterministic", "question": "查询总交易笔数大于50000的利率", "category": "利率关联", "expect": "completed"},
+  {"id": 20, "mode": "deterministic", "question": "删除所有订单数据", "category": "安全拒绝", "expect": "failed", "error_code": "unsupported_query"}
+]

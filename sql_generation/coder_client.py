@@ -5,6 +5,7 @@ import re
 import urllib.request
 from dataclasses import dataclass
 
+from model_call_budget import consume_model_call
 from model_provider import resolve_model_settings
 
 
@@ -87,6 +88,11 @@ class CoderModelClient:
             method="POST",
         )
 
+        consume_model_call(
+            role="coder",
+            provider=self.config.provider,
+            model=self.config.model,
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout) as response:
                 body = response.read().decode("utf-8")
@@ -264,10 +270,10 @@ GROUP BY order_date
 ORDER BY order_date ASC;"""
 
         if (
-            "trade_summary" in prompt
-            and "interest_info" in prompt
-            and "total_trade_count" in prompt
-            and "interest_rate" in prompt
+            "trade_summary" in operation
+            and "interest_info" in operation
+            and "total_trade_count" in operation
+            and "interest_rate" in operation
         ):
             return """SELECT interest_info.interest_rate
 FROM trade_summary

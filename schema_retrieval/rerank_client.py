@@ -6,6 +6,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import List, Optional
 
+from .tokenizer import tokenize
+
 
 @dataclass
 class RerankDocument:
@@ -212,11 +214,28 @@ class AliyunRerankClient:
             for term in ["总交易笔数", "交易笔数", "利率", "年化利率", "用户利率"]
             if term in query
         ]
+        query_tokens = {
+            token.lower()
+            for token in tokenize(query)
+            if len(token.strip()) >= 2
+        }
 
         scored_results: List[RerankResult] = []
 
         for doc in documents:
             score = 0.0
+
+            doc_tokens = {
+                token.lower()
+                for token in tokenize(doc.text)
+                if len(token.strip()) >= 2
+            }
+            # 无外部 Rerank 服务时也必须对所有业务域生效，不能只识别“交易/利率”。
+            # 较长词通常是字段名、业务实体或样例值，因此给予更高权重。
+            score += sum(
+                1.0 + min(len(token), 8) / 8.0
+                for token in query_tokens.intersection(doc_tokens)
+            )
 
             for term in query_terms:
                 if term in doc.text:

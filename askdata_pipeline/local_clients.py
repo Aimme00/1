@@ -86,6 +86,7 @@ class SimpleKeywordExtractor:
             "订单日期",
             "销售日期",
             "区域",
+            "地区",
             "产品",
             "商品",
             "品类",
@@ -104,6 +105,12 @@ class SimpleKeywordExtractor:
         for phrase in phrase_rules:
             if phrase in query and phrase not in keywords:
                 keywords.append(phrase)
+
+        # 完整问题能够保留诸如“华南”“智能手机 Pro”这类实体值；仅保留固定
+        # 业务词会让字段样例值和维度字段在复杂跨表问题中失去召回机会。
+        normalized_query = query.strip()
+        if normalized_query and normalized_query not in keywords:
+            keywords.append(normalized_query)
 
         if not keywords:
             keywords.append(query)

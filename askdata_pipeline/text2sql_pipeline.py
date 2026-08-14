@@ -22,6 +22,7 @@ from sql_generation import (
     CotStep,
     LocalSchemaStore,
     SqlGenerator,
+    normalize_sql_for_dialect,
 )
 from sql_validation import (
     SQLValidationRepairLoop,
@@ -221,6 +222,10 @@ class AskDataText2SQLPipeline:
                     sql_cot_step,
                     sql_dialect=self.config.sql_dialect,
                 )
+                initial_sql = normalize_sql_for_dialect(
+                    generation_result.sql,
+                    self.config.sql_dialect,
+                )
 
                 def repair_sql(
                     previous_sql: str,
@@ -231,18 +236,22 @@ class AskDataText2SQLPipeline:
                         f"第 {attempt_number} 次 SQL：{previous_sql}\n"
                         f"校验错误：{feedback}"
                     )
-                    return sql_generator.generate(
+                    repaired_sql = sql_generator.generate(
                         sql_cot_step,
                         sql_dialect=self.config.sql_dialect,
                         correction_context=correction,
                     ).sql
+                    return normalize_sql_for_dialect(
+                        repaired_sql,
+                        self.config.sql_dialect,
+                    )
 
                 allowed_columns = {
                     table_name: [column.column_name for column in table.columns]
                     for table_name, table in local_schema.tables.items()
                 }
                 outcome = repair_loop.run(
-                    generation_result.sql,
+                    initial_sql,
                     repair=repair_sql,
                     allowed_tables=local_schema.tables.keys(),
                     allowed_columns=allowed_columns,
@@ -307,6 +316,61 @@ class AskDataText2SQLPipeline:
                     return state
                 self._emit(event_callback, "sql_execute", "running", "正在执行只读 SQL 查询")
                 execution_result = self.mcp_router.execute(execution_request)
+                execution_repair_attempts: List[Dict[str, object]] = []
+                for execution_attempt in range(
+                    1,
+                    self.config.max_execution_repair_attempts + 1,
+                ):
+                    if execution_result.success:
+                        break
+                    database_error = self._safe_database_error(execution_result.error)
+                    self._emit(
+                        event_callback,
+                        "sql_generate",
+                        "running",
+                        f"数据库执行报错，正在进行第 {execution_attempt} 次方言修正",
+                    )
+                    correction = (
+                        f"上一次 SQL：{execution_result.sql or outcome.sql}\n"
+                        f"目标数据库方言：{self.config.sql_dialect}\n"
+                        f"数据库执行错误：{database_error}\n"
+                        "请修复方言、函数类型或聚合语义错误，保持原查询意图。"
+                    )
+                    repaired_sql = normalize_sql_for_dialect(
+                        sql_generator.generate(
+                            sql_cot_step,
+                            sql_dialect=self.config.sql_dialect,
+                            correction_context=correction,
+                        ).sql,
+                        self.config.sql_dialect,
+                    )
+                    repaired_validation = self.sql_validator.validate(
+                        repaired_sql,
+                        allowed_tables=local_schema.tables.keys(),
+                        allowed_columns=allowed_columns,
+                    )
+                    execution_repair_attempts.append({
+                        "number": execution_attempt,
+                        "trigger": "execution_error",
+                        "database_error": database_error,
+                        "sql": repaired_sql,
+                        "validation": repaired_validation.to_dict(),
+                    })
+                    if not repaired_validation.is_valid:
+                        execution_result = type(execution_result)(
+                            database=sql_cot_step.database,
+                            sql=repaired_sql,
+                            success=False,
+                            error=repaired_validation.feedback_text(),
+                        )
+                        continue
+                    state.generated_sql = repaired_validation.validated_sql
+                    state.validation_result = repaired_validation.to_dict()
+                    execution_request = {
+                        "database": sql_cot_step.database,
+                        "sql": repaired_validation.validated_sql,
+                    }
+                    execution_result = self.mcp_router.execute(execution_request)
                 execution_payload = execution_result.to_dict()
                 state.query_result = execution_payload
                 self._emit(
@@ -322,9 +386,12 @@ class AskDataText2SQLPipeline:
                         database=sql_cot_step.database,
                         cot_step=sql_cot_step,
                         local_schema=local_schema.to_prompt_context(),
-                        sql=outcome.sql,
-                        validation_result=outcome.validation.to_dict(),
-                        sql_attempts=[attempt.to_dict() for attempt in outcome.attempts],
+                        sql=execution_result.sql or state.generated_sql or outcome.sql,
+                        validation_result=state.validation_result,
+                        sql_attempts=(
+                            [attempt.to_dict() for attempt in outcome.attempts]
+                            + execution_repair_attempts
+                        ),
                         execution_request=execution_request,
                         execution_result=execution_payload,
                     )
@@ -375,13 +442,23 @@ class AskDataText2SQLPipeline:
         return state
 
     @staticmethod
+    def _safe_database_error(error: Optional[str]) -> str:
+        """只把可用于 SQL 修复的错误文本发给模型，避免过长日志或连接信息外泄。"""
+        message = re.sub(r"postgres(?:ql)?://\S+", "[database-url-redacted]", str(error or ""), flags=re.I)
+        return message[:2000] or "未知数据库执行错误"
+
+    @staticmethod
     def _unsafe_user_intent(query: str) -> str:
-        """在进入模型前拦截明确的数据写入/破坏诉求。"""
+        """在进入模型前拦截写入、破坏和个人敏感信息诉求。"""
         normalized = "".join(query.lower().split())
         patterns = (
             (r"(?:删除|删掉|清空|移除).*(?:订单|数据|记录|表)", "删除"),
             (r"(?:修改|更新|改掉).*(?:订单|数据|记录|字段)", "修改"),
             (r"(?:新增|插入|写入|导入).*(?:订单|数据|记录)", "写入"),
+            (
+                r"(?:手机号|手机号码|电话号码|身份证号|身份证号码|邮箱地址|电子邮箱|家庭住址|详细地址)",
+                "个人敏感信息查询",
+            ),
         )
         for pattern, label in patterns:
             if re.search(pattern, normalized):
@@ -602,8 +679,8 @@ class AskDataText2SQLPipeline:
                         "vector": 1.0,
                     },
                 ),
-                rerank_top_multiplier=2,
-                rerank_min_top_n=2,
+                rerank_top_multiplier=6,
+                rerank_min_top_n=12,
                 rerank_max_top_n=20,
             ),
             sample_size=self.config.sample_size,

@@ -14,7 +14,12 @@ from backend.data_source import DataSourceSettings
 from backend.quota import DemoQuotaConfig
 from env_settings import runtime_dir, validate_vercel_environment
 from model_provider import allow_mock_model
-from sql_generation import CoderModelClient, CoderModelConfig
+from mcp_router import MCPExecutionRequest, PostgresExecutorConfig, PostgresQueryExecutor
+from sql_generation import (
+    CoderModelClient,
+    CoderModelConfig,
+    normalize_sql_for_dialect,
+)
 
 
 class VercelDeploymentContractTestCase(unittest.TestCase):
@@ -137,6 +142,81 @@ Schema: orders.order_date orders.sales_amount"""
         sql = client.generate_sql(prompt)
         self.assertIn("CURRENT_DATE - INTERVAL '29 days'", sql)
         self.assertNotIn("date('now'", sql)
+
+    def test_postgres_two_argument_round_casts_aggregate_to_numeric(self):
+        sql = """SELECT
+    TO_CHAR(order_date, 'YYYY-MM') AS sales_month,
+    ROUND(SUM(sales_amount), 2) AS sales_amount
+FROM orders
+GROUP BY TO_CHAR(order_date, 'YYYY-MM');"""
+        normalized = normalize_sql_for_dialect(sql, "postgres")
+        compact = " ".join(normalized.upper().split())
+        self.assertIn("ROUND(CAST(SUM(SALES_AMOUNT) AS DECIMAL), 2)", compact)
+        self.assertIn("TO_CHAR(ORDER_DATE, 'YYYY-MM')", compact)
+
+    def test_postgres_round_without_digits_is_not_rewritten(self):
+        sql = "SELECT ROUND(sales_amount) FROM orders"
+        self.assertEqual(normalize_sql_for_dialect(sql, "postgres"), sql)
+
+    def test_non_postgres_round_is_not_rewritten(self):
+        sql = "SELECT ROUND(SUM(sales_amount), 2) FROM orders"
+        self.assertEqual(normalize_sql_for_dialect(sql, "sqlite"), sql)
+
+    def test_postgres_executor_normalizes_month_comparison_before_execution(self):
+        executed = []
+
+        class FakeCursor:
+            description = []
+
+            def __init__(self, rows=None):
+                self._rows = rows or []
+
+            def fetchmany(self, _limit):
+                return list(self._rows)
+
+        class FakeTransaction:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+        class FakeConnection:
+            def transaction(self):
+                return FakeTransaction()
+
+            def execute(self, sql, params=None):
+                executed.append((sql, params))
+                if "sales_month" in sql:
+                    return FakeCursor(
+                        [
+                            {"sales_month": "2026-07", "sales_amount": 100.25},
+                            {"sales_month": "2026-08", "sales_amount": 120.75},
+                        ]
+                    )
+                return FakeCursor()
+
+            def close(self):
+                pass
+
+        sql = """SELECT
+            TO_CHAR(order_date, 'YYYY-MM') AS sales_month,
+            ROUND(SUM(sales_amount), 2) AS sales_amount
+        FROM orders
+        GROUP BY TO_CHAR(order_date, 'YYYY-MM')
+        ORDER BY sales_month"""
+        executor = PostgresQueryExecutor(
+            PostgresExecutorConfig(database_url="postgresql://example.test/db"),
+            database_alias="trade_db",
+        )
+        with patch("psycopg.connect", return_value=FakeConnection()):
+            result = executor.execute(MCPExecutionRequest(database="trade_db", sql=sql))
+
+        self.assertTrue(result.success, result.error)
+        self.assertEqual(result.row_count, 2)
+        compact = " ".join(result.sql.upper().split())
+        self.assertIn("ROUND(CAST(SUM(SALES_AMOUNT) AS DECIMAL), 2)", compact)
+        self.assertEqual(executed[-1][0], result.sql)
 
 
 if __name__ == "__main__":

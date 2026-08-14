@@ -7,6 +7,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Iterator
 
+from model_call_budget import consume_model_call
 from model_provider import resolve_model_settings
 
 
@@ -138,6 +139,11 @@ class ThinkingModelClient:
             method="POST",
         )
 
+        consume_model_call(
+            role="cot",
+            provider=self.config.provider,
+            model=self.config.model,
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout) as response:
                 for raw_line in response:
@@ -186,6 +192,11 @@ class ThinkingModelClient:
             method="POST",
         )
 
+        consume_model_call(
+            role="cot",
+            provider=self.config.provider,
+            model=self.config.model,
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.config.timeout) as response:
                 body = response.read().decode("utf-8")
@@ -209,7 +220,17 @@ class ThinkingModelClient:
   输出目标: orders.channel，order_count，refund_count，refund_rate
 )"""
 
-        if any(term in normalized for term in ("异常日期", "异常的日期", "销售异常")):
+        if (
+            any(
+                term in normalized
+                for term in ("异常日期", "异常的日期", "销售异常", "销售额异常", "异常倍数")
+            )
+            or (
+                "异常" in normalized
+                and "日期" in normalized
+                and any(term in normalized for term in ("销售额", "订单数", "销量"))
+            )
+        ):
             return """步骤1：
 (
   数据库: trade_db,
@@ -313,10 +334,8 @@ class ThinkingModelClient:
 )"""
 
         if (
-            "total_trade_count" in prompt
-            and "interest_rate" in prompt
-            and "trade_summary.user_id" in prompt
-            and "interest_info.user_id" in prompt
+            any(term in normalized for term in ("交易笔数", "总交易笔数", "累计交易笔数", "total_trade_count"))
+            and any(term in normalized for term in ("利率", "年化利率", "interest_rate"))
         ):
             return """步骤1：
 (

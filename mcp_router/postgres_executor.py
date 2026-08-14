@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from env_settings import env_int, postgres_url
+from sql_generation import normalize_sql_for_dialect
 from .objects import MCPExecutionRequest, MCPExecutionResult
 from .readonly_guard import is_obviously_readonly_sql
 
@@ -52,17 +53,18 @@ class PostgresQueryExecutor:
         self.database = database_alias or "trade_db"
 
     def execute(self, request: MCPExecutionRequest) -> MCPExecutionResult:
+        normalized_sql = normalize_sql_for_dialect(request.sql, "postgres")
         if request.database != self.database:
             return MCPExecutionResult(
                 database=request.database,
-                sql=request.sql,
+                sql=normalized_sql,
                 success=False,
                 error=f"数据库路由错误：当前执行器只处理 {self.database}",
             )
-        if not is_obviously_readonly_sql(request.sql):
+        if not is_obviously_readonly_sql(normalized_sql):
             return MCPExecutionResult(
                 database=request.database,
-                sql=request.sql,
+                sql=normalized_sql,
                 success=False,
                 error="只允许执行单条 SELECT/只读 CTE 查询。",
             )
@@ -87,7 +89,7 @@ class PostgresQueryExecutor:
                     "SELECT set_config('statement_timeout', %s, true)",
                     (str(self.config.statement_timeout_ms),),
                 )
-                cursor = connection.execute(request.sql)
+                cursor = connection.execute(normalized_sql)
                 rows = cursor.fetchmany(self.config.max_rows + 1)
                 truncated = len(rows) > self.config.max_rows
                 rows = rows[: self.config.max_rows]
@@ -97,7 +99,7 @@ class PostgresQueryExecutor:
 
             return MCPExecutionResult(
                 database=request.database,
-                sql=request.sql,
+                sql=normalized_sql,
                 success=True,
                 columns=columns,
                 rows=rows,
@@ -108,7 +110,7 @@ class PostgresQueryExecutor:
         except Exception as exc:
             return MCPExecutionResult(
                 database=request.database,
-                sql=request.sql,
+                sql=normalized_sql,
                 success=False,
                 duration_ms=int((time.monotonic() - started_at) * 1000),
                 error=str(exc)[:500],

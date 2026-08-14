@@ -28,7 +28,12 @@ class SqlPromptBuilder:
 3. 不得编造不存在的表、字段或关联关系。
 4. 只输出SQL语句，不输出解释性内容。
 5. SQL需要符合{request.sql_dialect}语法。
-6. 不要输出Markdown代码块，不要输出```sql。
+6. PostgreSQL 中使用 ROUND(expr, 位数) 时，expr 必须显式转换为 NUMERIC，
+   例如 ROUND(CAST(SUM(sales_amount) AS NUMERIC), 2)。
+7. PostgreSQL 日期计算使用 DATE_TRUNC、TO_CHAR 和 INTERVAL；禁止使用
+   DATE_FORMAT、STRFTIME、JULIANDAY 等 MySQL/SQLite 函数。
+8. 除法分母使用 NULLIF(分母, 0) 防止除零。
+9. 不要输出Markdown代码块，不要输出```sql。
 
 # 当前步骤CoT
 处理对象：{cot_step.processing_objects}
