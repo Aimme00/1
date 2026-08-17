@@ -176,7 +176,21 @@ class AskDataText2SQLPipeline:
                 for columns in schema_graph.columns.values()
                 for column in columns
             }
-            self._emit(event_callback, "schema", "completed", "Schema 检索完成")
+            self._emit(
+                event_callback,
+                "schema",
+                "completed",
+                "Schema 检索完成",
+                {
+                    "keywords": resolved_keywords,
+                    "tables": list(schema_graph.tables.keys()),
+                    "columns": [
+                        column.column_name
+                        for columns in schema_graph.columns.values()
+                        for column in columns
+                    ],
+                },
+            )
             if self._cancelled(state, should_cancel, event_callback):
                 return state
 
@@ -206,7 +220,22 @@ class AskDataText2SQLPipeline:
                     unsupported_reason,
                     node="plan",
                 )
-            self._emit(event_callback, "plan", "completed", f"已生成 {len(cot_result.steps)} 个执行步骤")
+            self._emit(
+                event_callback,
+                "plan",
+                "completed",
+                f"已生成 {len(cot_result.steps)} 个执行步骤",
+                {
+                    "steps": [
+                        {
+                            "step": index,
+                            "operation": step.operation_instruction,
+                            "output": step.output_target,
+                        }
+                        for index, step in enumerate(cot_result.steps, start=1)
+                    ]
+                },
+            )
 
             schema_store = LocalSchemaStore.from_schema_graph(schema_graph)
             sql_generator = self.sql_generator_factory(schema_store)
@@ -238,6 +267,16 @@ class AskDataText2SQLPipeline:
                         generation_result.sql,
                         self.config.sql_dialect,
                     )
+                self._emit(
+                    event_callback,
+                    "sql_generate",
+                    "completed",
+                    f"第 {step_index} 段 SQL 已生成",
+                    {
+                        "sql": initial_sql,
+                        "dialect": self.config.sql_dialect,
+                    },
+                )
 
                 def repair_sql(
                     previous_sql: str,
@@ -283,7 +322,13 @@ class AskDataText2SQLPipeline:
                     "sql_validate",
                     "completed" if outcome.success else "failed",
                     "SQL 安全校验通过" if outcome.success else "SQL 安全校验失败",
-                    {"attempts": len(outcome.attempts)},
+                    {
+                        "valid": outcome.validation.is_valid,
+                        "parser": outcome.validation.parser,
+                        "tables": sorted(outcome.validation.tables),
+                        "attempt_count": len(outcome.attempts),
+                        "issues": [issue.to_dict() for issue in outcome.validation.issues],
+                    },
                 )
 
                 if not outcome.success:
@@ -409,7 +454,13 @@ class AskDataText2SQLPipeline:
                     "sql_execute",
                     "completed" if execution_result.success else "failed",
                     f"查询完成，返回 {execution_payload.get('row_count', 0)} 行" if execution_result.success else "数据库查询失败",
-                    {"row_count": execution_payload.get("row_count", 0)},
+                    {
+                        "database": execution_payload.get("database", sql_cot_step.database),
+                        "row_count": execution_payload.get("row_count", 0),
+                        "duration_ms": execution_payload.get("duration_ms", 0),
+                        "columns": execution_payload.get("columns") or [],
+                        "truncated": bool(execution_payload.get("truncated", False)),
+                    },
                 )
 
                 state.step_logs.append(
@@ -457,6 +508,11 @@ class AskDataText2SQLPipeline:
                     "数据分析与图表生成完成"
                     if chart_requested
                     else "数据分析与结论生成完成",
+                    {
+                        "answer": state.final_answer,
+                        "insight_count": len(state.insights),
+                        "chart_count": len(state.chart_configs),
+                    },
                 )
             if state.status == AgentRunStatus.RUNNING:
                 state.status = AgentRunStatus.COMPLETED

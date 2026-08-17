@@ -621,27 +621,48 @@ def create_app(
 
         @app.get("/styles.css", include_in_schema=False)
         def styles():
-            return FileResponse(WEB_DIR / "styles.css")
+            return FileResponse(
+                WEB_DIR / "styles.css",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
 
         @app.get("/dashboard.css", include_in_schema=False)
         def dashboard_styles():
-            return FileResponse(WEB_DIR / "dashboard.css")
+            return FileResponse(
+                WEB_DIR / "dashboard.css",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
 
         @app.get("/preview-bootstrap.js", include_in_schema=False)
         def preview_bootstrap():
-            return FileResponse(WEB_DIR / "preview-bootstrap.js")
+            return FileResponse(
+                WEB_DIR / "preview-bootstrap.js",
+                headers={"Cache-Control": "no-cache"},
+            )
 
         @app.get("/app.js", include_in_schema=False)
         def web_app_script():
-            return FileResponse(WEB_DIR / "app.js")
+            return FileResponse(
+                WEB_DIR / "app.js",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
 
         @app.get("/downloads.js", include_in_schema=False)
         def web_downloads_script():
-            return FileResponse(WEB_DIR / "downloads.js")
+            return FileResponse(
+                WEB_DIR / "downloads.js",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
 
         @app.get("/", include_in_schema=False)
         def index():
-            return FileResponse(WEB_DIR / "index.html")
+            return FileResponse(
+                WEB_DIR / "index.html",
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                },
+            )
 
     @app.on_event("shutdown")
     def shutdown():

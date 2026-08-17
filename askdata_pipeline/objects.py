@@ -134,14 +134,89 @@ class AgentState:
             }
             for index, item in enumerate(self.plan, start=1)
         ]
+        validation_tables = list(self.validation_result.get("tables") or [])
+        validation_columns = list(self.validation_result.get("columns") or [])
+        validation_issues = [
+            {
+                "code": issue.get("code", ""),
+                "message": issue.get("message", ""),
+                "level": issue.get("level", ""),
+            }
+            for issue in (self.validation_result.get("issues") or [])
+            if isinstance(issue, dict)
+        ]
+        sql_attempt_count = sum(len(log.sql_attempts) for log in self.step_logs)
+        analysis_details = {
+            "answer": self.final_answer,
+            "insight_count": len(self.insights),
+            "chart_count": len(self.chart_configs),
+        }
         agent_trace = [
-            {"node": "intent", "label": "意图识别", "status": "completed", "message": "已识别为只读数据库分析任务"},
-            {"node": "schema", "label": "Schema 检索", "status": "completed", "message": "已定位查询所需的数据表与字段", "details": {"keywords": self.keywords}},
+            {
+                "node": "intent",
+                "label": "意图识别",
+                "status": "completed",
+                "message": "已识别为只读数据库分析任务",
+                "details": {
+                    "question": self.query,
+                    "task_type": "只读数据库分析",
+                },
+            },
+            {
+                "node": "schema",
+                "label": "Schema 检索",
+                "status": "completed",
+                "message": "已定位查询所需的数据表与字段",
+                "details": {
+                    "keywords": self.keywords,
+                    "tables": validation_tables,
+                    "columns": validation_columns,
+                },
+            },
             {"node": "plan", "label": "分析规划", "status": "completed" if public_plan else "failed", "message": f"已生成 {len(public_plan)} 个结构化执行步骤", "details": {"steps": public_plan}},
-            {"node": "sql_generate", "label": "SQL 生成", "status": "completed" if self.generated_sql else "failed", "message": "已根据分析计划生成查询语句" if self.generated_sql else "未生成查询语句"},
-            {"node": "sql_validate", "label": "SQL 校验", "status": "completed" if validation_ok else "failed", "message": "SQL 只读安全校验通过" if validation_ok else "SQL 安全校验未通过"},
-            {"node": "sql_execute", "label": "执行查询", "status": "completed" if self.query_result.get("success", True) else "failed", "message": f"查询完成，返回 {row_count} 行数据", "details": {"row_count": row_count, "duration_ms": duration_ms}},
-            {"node": "analysis", "label": "结果分析", "status": "completed" if self.status == AgentRunStatus.COMPLETED else "failed", "message": "已基于查询结果生成描述性结论"},
+            {
+                "node": "sql_generate",
+                "label": "SQL 生成",
+                "status": "completed" if self.generated_sql else "failed",
+                "message": "已根据分析计划生成查询语句" if self.generated_sql else "未生成查询语句",
+                "details": {
+                    "sql": self.generated_sql,
+                    "dialect": self.scope.get("sql_dialect", ""),
+                },
+            },
+            {
+                "node": "sql_validate",
+                "label": "SQL 校验",
+                "status": "completed" if validation_ok else "failed",
+                "message": "SQL 只读安全校验通过" if validation_ok else "SQL 安全校验未通过",
+                "details": {
+                    "valid": validation_ok,
+                    "parser": self.validation_result.get("parser", ""),
+                    "tables": validation_tables,
+                    "attempt_count": sql_attempt_count,
+                    "issues": validation_issues,
+                },
+            },
+            {
+                "node": "sql_execute",
+                "label": "执行查询",
+                "status": "completed" if self.query_result.get("success", True) else "failed",
+                "message": f"查询完成，返回 {row_count} 行数据",
+                "details": {
+                    "database": self.scope.get("database", self.query_result.get("database", "")),
+                    "row_count": row_count,
+                    "duration_ms": duration_ms,
+                    "columns": self.query_result.get("columns") or [],
+                    "truncated": bool(self.query_result.get("truncated", False)),
+                },
+            },
+            {
+                "node": "analysis",
+                "label": "结果分析",
+                "status": "completed" if self.status == AgentRunStatus.COMPLETED else "failed",
+                "message": "已基于查询结果生成描述性结论",
+                "details": analysis_details,
+            },
         ]
         return json_safe({
             "schema_version": "1.0",

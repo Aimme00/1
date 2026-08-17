@@ -81,7 +81,15 @@ class DynamicAskDataService:
             "intent",
             "completed",
             "已选择数据库查询路径" if decision.route == RouteType.DATABASE_QUERY else "已选择数据问答路径",
-            {"decision": decision.to_dict()},
+            {
+                "decision": decision.to_dict(),
+                "question": query,
+                "task_type": (
+                    "只读数据库分析"
+                    if decision.route == RouteType.DATABASE_QUERY
+                    else "基于上下文的数据问答"
+                ),
+            },
         )
 
         if should_cancel and should_cancel():

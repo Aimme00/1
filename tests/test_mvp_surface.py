@@ -96,6 +96,61 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
         values = [row["sales_amount"] for row in response["table"]["rows"]]
         self.assertTrue(all(value >= 0 for value in values))
 
+    def test_agent_trace_exposes_concrete_result_for_every_step(self) -> None:
+        response = self.assert_query_success(
+            "最近30天销售额趋势如何？", ["order_date", "sales_amount"], 30
+        )
+        trace = {item["node"]: item for item in response["agent_trace"]}
+        self.assertEqual(set(trace), {
+            "intent", "schema", "plan", "sql_generate", "sql_validate",
+            "sql_execute", "analysis",
+        })
+        self.assertEqual(trace["intent"]["details"]["question"], "最近30天销售额趋势如何？")
+        self.assertTrue(trace["schema"]["details"]["tables"])
+        self.assertTrue(trace["schema"]["details"]["columns"])
+        self.assertTrue(trace["plan"]["details"]["steps"])
+        self.assertIn("SELECT", trace["sql_generate"]["details"]["sql"].upper())
+        self.assertTrue(trace["sql_validate"]["details"]["valid"])
+        self.assertEqual(trace["sql_execute"]["details"]["row_count"], 30)
+        self.assertEqual(
+            trace["sql_execute"]["details"]["columns"],
+            ["order_date", "sales_amount"],
+        )
+        self.assertTrue(trace["analysis"]["details"]["answer"])
+
+    def test_live_events_expose_concrete_step_results(self) -> None:
+        events: list[dict] = []
+
+        def capture(node: str, status: str, message: str, data: dict) -> None:
+            events.append({
+                "node": node,
+                "status": status,
+                "message": message,
+                "data": data,
+            })
+
+        result = self.pipeline.run(
+            "最近30天销售额趋势如何？",
+            event_callback=capture,
+        )
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED, result.error)
+        completed = {
+            event["node"]: event["data"]
+            for event in events
+            if event["status"] == "completed"
+        }
+        self.assertTrue(completed["schema"]["tables"])
+        self.assertTrue(completed["schema"]["columns"])
+        self.assertTrue(completed["plan"]["steps"])
+        self.assertIn("SELECT", completed["sql_generate"]["sql"].upper())
+        self.assertTrue(completed["sql_validate"]["valid"])
+        self.assertEqual(completed["sql_execute"]["row_count"], 30)
+        self.assertEqual(
+            completed["sql_execute"]["columns"],
+            ["order_date", "sales_amount"],
+        )
+        self.assertTrue(completed["analysis"]["answer"])
+
     def test_region_order_ranking_is_sorted(self) -> None:
         response = self.assert_query_success(
             "各区域已完成订单量排名是什么？", ["region", "order_count"], 6
