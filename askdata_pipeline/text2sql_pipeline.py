@@ -35,6 +35,7 @@ from .demo_data import create_trade_demo_database, get_trade_business_meta
 from .drilldown import build_drill_actions
 from .local_clients import LocalHashEmbeddingClient, SimpleKeywordExtractor
 from .objects import AgentRunStatus, PipelineConfig, PipelineResult, StepExecutionLog
+from .verified_demo_questions import find_verified_demo_question
 
 
 SqlGeneratorFactory = Callable[[LocalSchemaStore], SqlGenerator]
@@ -132,6 +133,11 @@ class AskDataText2SQLPipeline:
         if run_id:
             state.run_id = run_id
 
+        verified_demo = find_verified_demo_question(query)
+        if verified_demo:
+            state.scope["verified_demo"] = True
+            state.scope["verified_demo_question"] = verified_demo.question
+
         try:
             self._emit(event_callback, "run", "running", "Agent 开始处理问题")
             if self._cancelled(state, should_cancel, event_callback):
@@ -175,10 +181,13 @@ class AskDataText2SQLPipeline:
                 return state
 
             self._emit(event_callback, "plan", "running", "正在拆解分析步骤")
-            cot_result = self.cot_planner.plan(
-                user_query=contextual_query,
-                schema_graph=schema_graph,
-            )
+            if verified_demo:
+                cot_result = verified_demo.build_plan(self.config.database_name)
+            else:
+                cot_result = self.cot_planner.plan(
+                    user_query=contextual_query,
+                    schema_graph=schema_graph,
+                )
             state.cot_output = cot_result.raw_output
             state.plan = [
                 {
@@ -218,20 +227,25 @@ class AskDataText2SQLPipeline:
 
                 local_schema = schema_store.extract_local_schema(sql_cot_step)
                 self._emit(event_callback, "sql_generate", "running", f"正在生成第 {step_index} 段 SQL")
-                generation_result = sql_generator.generate(
-                    sql_cot_step,
-                    sql_dialect=self.config.sql_dialect,
-                )
-                initial_sql = normalize_sql_for_dialect(
-                    generation_result.sql,
-                    self.config.sql_dialect,
-                )
+                if verified_demo:
+                    initial_sql = verified_demo.sql_for(self.config.sql_dialect)
+                else:
+                    generation_result = sql_generator.generate(
+                        sql_cot_step,
+                        sql_dialect=self.config.sql_dialect,
+                    )
+                    initial_sql = normalize_sql_for_dialect(
+                        generation_result.sql,
+                        self.config.sql_dialect,
+                    )
 
                 def repair_sql(
                     previous_sql: str,
                     feedback: str,
                     attempt_number: int,
                 ) -> str:
+                    if verified_demo:
+                        return verified_demo.sql_for(self.config.sql_dialect)
                     correction = (
                         f"第 {attempt_number} 次 SQL：{previous_sql}\n"
                         f"校验错误：{feedback}"
@@ -317,10 +331,10 @@ class AskDataText2SQLPipeline:
                 self._emit(event_callback, "sql_execute", "running", "正在执行只读 SQL 查询")
                 execution_result = self.mcp_router.execute(execution_request)
                 execution_repair_attempts: List[Dict[str, object]] = []
-                for execution_attempt in range(
-                    1,
-                    self.config.max_execution_repair_attempts + 1,
-                ):
+                execution_attempt_limit = (
+                    0 if verified_demo else self.config.max_execution_repair_attempts
+                )
+                for execution_attempt in range(1, execution_attempt_limit + 1):
                     if execution_result.success:
                         break
                     database_error = self._safe_database_error(execution_result.error)
@@ -371,6 +385,23 @@ class AskDataText2SQLPipeline:
                         "sql": repaired_validation.validated_sql,
                     }
                     execution_result = self.mcp_router.execute(execution_request)
+                if verified_demo and execution_result.success:
+                    contract_error = verified_demo.result_contract_error(
+                        execution_result.columns,
+                        execution_result.row_count,
+                    )
+                    if contract_error:
+                        execution_result = type(execution_result)(
+                            database=execution_result.database,
+                            sql=execution_result.sql,
+                            success=False,
+                            columns=execution_result.columns,
+                            rows=execution_result.rows,
+                            row_count=execution_result.row_count,
+                            truncated=execution_result.truncated,
+                            duration_ms=execution_result.duration_ms,
+                            error=contract_error,
+                        )
                 execution_payload = execution_result.to_dict()
                 state.query_result = execution_payload
                 self._emit(

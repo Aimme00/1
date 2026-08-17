@@ -14,3 +14,4 @@ schema_index_demo.db
 __pycache__/
 *.py[cod]
 *.egg-info/
+outputs/

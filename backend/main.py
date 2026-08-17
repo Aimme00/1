@@ -635,6 +635,10 @@ def create_app(
         def web_app_script():
             return FileResponse(WEB_DIR / "app.js")
 
+        @app.get("/downloads.js", include_in_schema=False)
+        def web_downloads_script():
+            return FileResponse(WEB_DIR / "downloads.js")
+
         @app.get("/", include_in_schema=False)
         def index():
             return FileResponse(WEB_DIR / "index.html")

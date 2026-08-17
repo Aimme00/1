@@ -116,15 +116,14 @@ class DashboardStoreTestCase(unittest.TestCase):
 
 
 class DashboardFrontendContractTestCase(unittest.TestCase):
-    def test_frontend_exposes_dashboard_workflow(self) -> None:
+    def test_public_mvp_does_not_expose_dashboard_workflow(self) -> None:
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "web" / "index.html").read_text(encoding="utf-8")
         javascript = (base_dir / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="dashboardButton"', html)
-        self.assertIn('id="addDashboardButton"', html)
-        self.assertIn("/api/dashboards", javascript)
-        self.assertIn("addResultToDashboard", javascript)
-        self.assertTrue((base_dir / "web" / "dashboard.css").is_file())
+        self.assertNotIn('id="dashboardButton"', html)
+        self.assertNotIn('id="addDashboardButton"', html)
+        self.assertNotIn("/api/dashboards", javascript)
+        self.assertNotIn("addResultToDashboard", javascript)
 
 
 if __name__ == "__main__":

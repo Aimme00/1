@@ -89,6 +89,10 @@ class PublicDemoEndToEndTestCase(unittest.TestCase):
                     self.assertEqual(status, 200)
                     self.assertEqual(json.loads(payload)["status"], "ok")
 
+                    status, _, payload = await _request(app, "GET", "/downloads.js")
+                    self.assertEqual(status, 200)
+                    self.assertIn(b"AskDataDownloads", payload)
+
                     status, headers, payload = await _request(
                         app, "POST", "/api/auth/guest", body={}
                     )

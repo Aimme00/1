@@ -16,7 +16,7 @@ class OfflinePreviewContractTestCase(unittest.TestCase):
         )
 
     def test_page_uses_file_compatible_relative_assets(self) -> None:
-        for asset in ("styles.css", "dashboard.css", "preview-bootstrap.js", "app.js"):
+        for asset in ("styles.css", "preview-bootstrap.js", "app.js", "downloads.js"):
             self.assertIn(f'./{asset}', self.html)
             self.assertTrue((self.base_dir / "web" / asset).is_file())
 
@@ -53,7 +53,7 @@ class OfflinePreviewContractTestCase(unittest.TestCase):
         self.assertIn("generateChart === true", worker)
         self.assertIn("if (!(requested || CHART_INTENT.test(query))", worker)
 
-    def test_public_demo_exposes_two_question_quota_feedback(self) -> None:
+    def test_public_demo_uses_guest_session_without_legacy_quota_ui(self) -> None:
         worker = (self.base_dir / "functions" / "api" / "[[path]].js").read_text(
             encoding="utf-8"
         )
@@ -62,9 +62,9 @@ class OfflinePreviewContractTestCase(unittest.TestCase):
         self.assertIn("const usageBucket = 'lifetime'", worker)
         self.assertIn("request.headers.get('CF-Connecting-IP')", worker)
         self.assertIn("crypto.subtle.sign('HMAC'", worker)
-        self.assertIn("showQuota(created.quota)", javascript)
-        self.assertIn('id="quotaHint"', self.html)
-        self.assertIn("公开体验额度已用完", javascript)
+        self.assertIn('/api/auth/guest', javascript)
+        self.assertNotIn("showQuota(created.quota)", javascript)
+        self.assertNotIn('id="quotaHint"', self.html)
 
 
 if __name__ == "__main__":

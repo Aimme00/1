@@ -165,15 +165,15 @@ class AuthenticationServiceTestCase(unittest.TestCase):
 
 
 class AuthenticatedFrontendContractTestCase(unittest.TestCase):
-    def test_frontend_uses_session_identity_instead_of_user_id(self) -> None:
+    def test_public_mvp_uses_guest_session_identity_instead_of_user_id(self) -> None:
         project_dir = Path(__file__).resolve().parents[1]
         javascript = (project_dir / "web" / "app.js").read_text(encoding="utf-8")
         html = (project_dir / "web" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("/api/auth/login", javascript)
+        self.assertIn("/api/auth/guest", javascript)
         self.assertIn("/api/auth/me", javascript)
         self.assertNotIn("user_id", javascript)
-        self.assertIn('id="loginForm"', html)
-        self.assertIn('id="logoutButton"', html)
+        self.assertNotIn('id="loginForm"', html)
+        self.assertNotIn('id="logoutButton"', html)
 
 
 if __name__ == "__main__":
