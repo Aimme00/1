@@ -3,7 +3,6 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-import json
 import os
 import re
 import sqlite3
@@ -22,46 +21,35 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class MvpProductSurfaceTestCase(unittest.TestCase):
     def test_visible_examples_are_exactly_the_verified_catalog(self) -> None:
-        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
-        match = re.search(r"examples:(\[[^\n]+\])", script)
-        self.assertIsNotNone(match)
-        visible_questions = json.loads(match.group(1))
+        index = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
+        visible_questions = re.findall(r'data-query="([^"]+)"', index)
         self.assertEqual(
             visible_questions,
             [item.question for item in VERIFIED_DEMO_QUESTIONS],
         )
 
-    def test_home_exposes_only_the_declared_mvp(self) -> None:
+    def test_home_restores_the_full_workbench_around_the_verified_demo(self) -> None:
         index = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
         script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
         combined = index + script
 
         for text in (
-            "问数 Agent Demo",
-            "实验性 Demo",
-            "能力边界",
-            "理解问题",
-            "检索 Schema",
-            "生成查询计划",
-            "生成并校验 SQL",
-            "执行查询",
-            "生成结果",
-            "实际执行 SQL",
-            "结果校验提示",
-        ):
-            self.assertIn(text, combined)
-
-        for text in (
+            "问数工作台",
+            "描述性数据分析助手",
+            "新建分析",
+            "我的仪表盘",
+            "最近会话",
+            "已保存分析",
             "保存分析",
             "添加到仪表盘",
-            "测试模式",
-            "下钻",
-            "上卷",
-            "长期记忆",
-            "Schema 管理",
-            "切换数据源",
+            "下载 CSV",
+            "下载 Excel",
+            "下载图表 PNG",
+            "查看生成的查询",
+            "安全查询",
+            "当前版本不提供异常诊断、原因归因、预测或策略建议。",
         ):
-            self.assertNotIn(text, combined)
+            self.assertIn(text, combined)
 
     def test_readme_states_accuracy_and_product_boundaries(self) -> None:
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
@@ -210,7 +198,8 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
         order_by_id = {row["order_id"]: row for row in completed}
 
         trend = defaultdict(float)
-        cutoff = date.today() - timedelta(days=29)
+        latest_order_date = max(date.fromisoformat(row["order_date"]) for row in orders)
+        cutoff = latest_order_date - timedelta(days=29)
         for row in completed:
             if date.fromisoformat(row["order_date"]) >= cutoff:
                 trend[row["order_date"]] += row["sales_amount"]
@@ -225,8 +214,8 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
                 product_sales[products[item["product_id"]]] += item["line_amount"]
 
         monthly = defaultdict(float)
-        current_month = date.today().strftime("%Y-%m")
-        previous_month_end = date.today().replace(day=1) - timedelta(days=1)
+        current_month = latest_order_date.strftime("%Y-%m")
+        previous_month_end = latest_order_date.replace(day=1) - timedelta(days=1)
         previous_month = previous_month_end.strftime("%Y-%m")
         for row in completed:
             month = row["order_date"][:7]

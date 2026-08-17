@@ -103,15 +103,15 @@ class DrilldownServiceTestCase(unittest.TestCase):
 
 
 class DrilldownFrontendContractTestCase(unittest.TestCase):
-    def test_public_mvp_does_not_expose_drilldown(self) -> None:
+    def test_frontend_calls_drilldown_api(self) -> None:
         from pathlib import Path
 
         base_dir = Path(__file__).resolve().parents[1]
         html = (base_dir / "web" / "index.html").read_text(encoding="utf-8")
         javascript = (base_dir / "web" / "app.js").read_text(encoding="utf-8")
-        self.assertNotIn('id="drillPanel"', html)
-        self.assertNotIn("/api/drilldown", javascript)
-        self.assertNotIn("submitDrilldown", javascript)
+        self.assertIn('id="drillPanel"', html)
+        self.assertIn("/api/drilldown", javascript)
+        self.assertIn("submitDrilldown", javascript)
 
 
 if __name__ == "__main__":

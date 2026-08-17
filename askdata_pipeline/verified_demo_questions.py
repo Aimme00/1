@@ -77,13 +77,15 @@ VERIFIED_DEMO_QUESTIONS: Tuple[VerifiedDemoQuestion, ...] = (
             "sqlite": """SELECT order_date, ROUND(SUM(sales_amount), 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= DATE('now', '-29 days')
+  AND order_date >= DATE((SELECT MAX(order_date) FROM orders), '-29 days')
+  AND order_date <= DATE((SELECT MAX(order_date) FROM orders))
 GROUP BY order_date
 ORDER BY order_date ASC""",
             "postgres": """SELECT order_date, ROUND(SUM(sales_amount)::NUMERIC, 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= CURRENT_DATE - INTERVAL '29 days'
+  AND order_date >= (SELECT MAX(order_date) FROM orders) - INTERVAL '29 days'
+  AND order_date <= (SELECT MAX(order_date) FROM orders)
 GROUP BY order_date
 ORDER BY order_date ASC""",
         },
@@ -148,16 +150,16 @@ LIMIT 5""",
        ROUND(SUM(sales_amount), 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= DATE('now', 'start of month', '-1 month')
-  AND order_date < DATE('now', 'start of month', '+1 month')
+  AND order_date >= DATE((SELECT MAX(order_date) FROM orders), 'start of month', '-1 month')
+  AND order_date < DATE((SELECT MAX(order_date) FROM orders), 'start of month', '+1 month')
 GROUP BY STRFTIME('%Y-%m', order_date)
 ORDER BY sales_month ASC""",
             "postgres": """SELECT TO_CHAR(DATE_TRUNC('month', order_date), 'YYYY-MM') AS sales_month,
        ROUND(SUM(sales_amount)::NUMERIC, 2) AS sales_amount
 FROM orders
 WHERE order_status = 'completed'
-  AND order_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
-  AND order_date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+  AND order_date >= DATE_TRUNC('month', (SELECT MAX(order_date) FROM orders)) - INTERVAL '1 month'
+  AND order_date < DATE_TRUNC('month', (SELECT MAX(order_date) FROM orders)) + INTERVAL '1 month'
 GROUP BY DATE_TRUNC('month', order_date)
 ORDER BY DATE_TRUNC('month', order_date) ASC""",
         },

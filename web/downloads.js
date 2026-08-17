@@ -19,10 +19,11 @@
 
   function resultRows(result) {
     const columns = result?.table?.columns || [];
-    const rows = (result?.table?.rows || []).map(row => (
-      Array.isArray(row) ? row : columns.map(column => row?.[column])
-    ));
-    return { columns, rows };
+    const rows = result?.table?.rows || [];
+    return {
+      columns,
+      rows: rows.map(row => Array.isArray(row) ? row : columns.map(column => row?.[column])),
+    };
   }
 
   function buildCsv(result) {
@@ -75,7 +76,7 @@
   function downloadTable(format) {
     const result = currentResult();
     if (!result?.table) return notify('当前结果没有可下载的数据');
-    const question = state.currentQuery || document.getElementById('userMessage')?.textContent?.trim() || '问数分析';
+    const question = document.getElementById('userMessage')?.textContent?.trim() || '问数分析';
     const base = safeFileName(question, '问数分析');
     if (format === 'csv') {
       triggerDownload(new Blob([buildCsv(result)], { type: 'text/csv;charset=utf-8' }), `${base}.csv`);
