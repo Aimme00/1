@@ -120,6 +120,19 @@ class ApplicationServiceTestCase(unittest.TestCase):
                 self.assertEqual(application.list_conversations(user_id="u1")[0]["session_id"], "s1")
                 messages = application.get_conversation(user_id="u1", session_id="s1")
                 self.assertEqual([item["role"] for item in messages], ["user", "assistant"])
+                self.assertTrue(messages[-1]["payload"]["agent_trace"])
+                self.assertEqual(
+                    {item["node"] for item in messages[-1]["payload"]["agent_trace"]},
+                    {
+                        "intent",
+                        "schema",
+                        "plan",
+                        "sql_generate",
+                        "sql_validate",
+                        "sql_execute",
+                        "analysis",
+                    },
+                )
             finally:
                 application.close()
 

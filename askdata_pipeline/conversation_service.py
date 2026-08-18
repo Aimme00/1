@@ -91,7 +91,13 @@ class MemoryAwareAskDataService:
             conversation_context=context.to_prompt_context(),
             **pipeline_kwargs,
         )
+        # Keep the internal fields used by conversation memory (for example
+        # ``step_logs``), while also persisting the public response contract
+        # consumed by the web workspace.  In particular, ``agent_trace`` must
+        # survive after the live run so reopening a historical conversation can
+        # render the same execution process instead of only the final answer.
         payload = result.to_dict()
+        payload.update(result.to_api_response())
         result_preview = json.dumps(
             [log.execution_result for log in result.step_logs],
             ensure_ascii=False,

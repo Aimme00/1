@@ -51,6 +51,21 @@ class MvpProductSurfaceTestCase(unittest.TestCase):
         ):
             self.assertIn(text, combined)
 
+    def test_history_restores_the_full_agent_trace(self) -> None:
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("function restoreCompletedAnalysis", script)
+        self.assertIn("renderAgentTrace(trace)", script)
+        self.assertIn("历史分析流程已恢复", script)
+        self.assertIn(
+            "restoreCompletedAnalysis(user?.content||'',items[assistantIndex].payload)",
+            script,
+        )
+        self.assertIn(
+            "restoreCompletedAnalysis(item.query,item.result,{savedAnalysisId:item.id})",
+            script,
+        )
+
     def test_readme_states_accuracy_and_product_boundaries(self) -> None:
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("个人 AI 产品与 Vibe Coding 原型验证", readme)
