@@ -11,25 +11,7 @@
     <style>.analysis-boundary{max-width:760px!important;margin:-15px auto 0!important;padding:10px 14px;border:1px solid #e7e9ef;border-radius:10px;color:#7b8494!important;background:#fff;font-size:11px!important;line-height:1.6!important}</style>
   </head>
   <body data-layout="classic-workspace">
-    <section class="auth-screen" id="authScreen" aria-labelledby="loginTitle">
-      <div class="auth-card">
-        <div class="auth-brand"><span class="brand-mark">问</span><span><strong>问数</strong><small>SECURE ANALYTICS</small></span></div>
-        <p class="eyebrow">WELCOME BACK</p>
-        <h1 id="loginTitle">登录数据分析工作台</h1>
-        <p class="auth-copy">登录后，你的会话、分析结果和下载报表将与个人账号安全绑定。</p>
-        <form id="loginForm" class="login-form">
-          <label for="loginEmail">邮箱</label>
-          <input id="loginEmail" type="email" autocomplete="username" placeholder="name@company.com" required />
-          <label for="loginPassword">密码</label>
-          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="输入登录密码" required />
-          <p class="login-error hidden" id="loginError" role="alert"></p>
-          <button type="submit" id="loginButton">登录工作台</button>
-        </form>
-        <p class="auth-note">本地演示账号请查看项目 README；正式部署前请更换初始化密码并启用 HTTPS。</p>
-      </div>
-    </section>
-
-    <div class="app-shell auth-hidden" id="appShell">
+    <div class="app-shell" id="appShell">
       <aside class="sidebar">
         <a class="brand" href="/" aria-label="问数首页">
           <span class="brand-mark">问</span>
@@ -55,7 +37,7 @@
         <header class="topbar">
           <button class="mobile-menu" id="mobileMenu" aria-label="展开菜单">☰</button>
           <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1></div>
-          <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="退出登录"><span class="avatar" id="userAvatar">DA</span><span class="account-name" id="accountName">Data Analyst</span><span class="logout-label">退出</span></button></div>
+          <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="清空当前访客会话并重新开始"><span class="avatar" id="userAvatar">访</span><span class="account-name" id="accountName">正在进入工作台</span><span class="logout-label">重置体验</span></button></div>
         </header>
 
         <section class="chat-stage" id="chatStage">
@@ -114,7 +96,7 @@
         <footer class="composer-wrap" id="composerWrap">
           <form class="composer" id="chatForm">
             <textarea id="queryInput" rows="1" placeholder="询问数据，例如：最近30天销售额趋势如何？" maxlength="4000"></textarea>
-            <div class="composer-bottom"><div class="composer-options"><span class="composer-hint">只读查询 · SQL 安全校验</span><span class="composer-hint hidden" id="quotaHint"></span><label class="chart-option"><input type="checkbox" id="generateChart" /> 生成并可下载图表</label></div><button type="submit" id="sendButton" aria-label="发送">↑</button></div>
+            <div class="composer-bottom"><div class="composer-options"><span class="composer-hint">只读查询 · SQL 安全校验</span><span class="composer-hint hidden" id="quotaHint"></span><label class="chart-option"><input type="checkbox" id="generateChart" /> 生成并可下载图表</label></div><button type="submit" id="sendButton" aria-label="发送" disabled>↑</button></div>
           </form>
           <p class="disclaimer">结果仅描述现有数据，不代表因果判断或未来预测；重要决策请核对原始数据。</p>
         </footer>
