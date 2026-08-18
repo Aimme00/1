@@ -6,13 +6,13 @@
     <meta name="description" content="问数 · 描述性数据分析 Agent" />
     <meta name="askdata-layout" content="classic-workspace-v1" />
     <title>问数 · 描述性数据分析</title>
-    <link rel="stylesheet" href="./styles.css?v=20260818-step-results" />
-    <link rel="stylesheet" href="./dashboard.css?v=20260818-classic-workspace" />
+    <link rel="stylesheet" href="./styles.css?v=20260818-history-trace-v2" />
+    <link rel="stylesheet" href="./dashboard.css?v=20260818-history-trace-v2" />
     <style>.analysis-boundary{max-width:760px!important;margin:-15px auto 0!important;padding:10px 14px;border:1px solid #e7e9ef;border-radius:10px;color:#7b8494!important;background:#fff;font-size:11px!important;line-height:1.6!important}</style>
   </head>
   <body data-layout="classic-workspace">
     <div class="app-shell" id="appShell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="historySidebar">
         <a class="brand" href="/" aria-label="问数首页">
           <span class="brand-mark">问</span>
           <span><strong>问数</strong><small>AI Analytics</small></span>
@@ -32,11 +32,12 @@
           <button class="icon-button sync-source hidden" id="syncDataSourceButton" title="测试连接并同步 Schema" aria-label="测试连接并同步 Schema">↻</button>
         </div>
       </aside>
+      <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="关闭历史会话"></button>
 
       <main class="workspace">
         <header class="topbar">
-          <button class="mobile-menu" id="mobileMenu" aria-label="展开菜单">☰</button>
-          <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1></div>
+          <button class="mobile-menu" id="mobileMenu" type="button" aria-label="展开历史会话" aria-controls="historySidebar" aria-expanded="false"><span>☰</span><strong>历史会话</strong></button>
+          <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1><span class="build-badge">流程历史版 08-18B</span></div>
           <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="清空当前访客会话并重新开始"><span class="avatar" id="userAvatar">访</span><span class="account-name" id="accountName">正在进入工作台</span><span class="logout-label">重置体验</span></button></div>
         </header>
 
@@ -76,6 +77,7 @@
             </article>
             <section class="result-view hidden" id="resultView">
               <div class="result-actions" aria-label="结果操作">
+                <button id="showWorkflowButton" class="result-action workflow-action" type="button">⌁ 查看 Agent 执行过程</button>
                 <button id="saveAnalysisButton" class="result-action primary">☆ 保存分析</button>
                 <button id="addDashboardButton" class="result-action">▦ 添加到仪表盘</button>
                 <button id="downloadCsvButton" class="result-action">↓ 下载 CSV</button>
@@ -103,7 +105,7 @@
       </main>
     </div>
     <script src="./preview-bootstrap.js" defer></script>
-    <script src="./app.js?v=20260818-step-results" defer></script>
-    <script src="./downloads.js?v=20260818-classic-workspace" defer></script>
+    <script src="./app.js?v=20260818-history-trace-v2" defer></script>
+    <script src="./downloads.js?v=20260818-history-trace-v2" defer></script>
   </body>
 </html>

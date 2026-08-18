@@ -52,11 +52,16 @@ class MvpProductSurfaceTestCase(unittest.TestCase):
             self.assertIn(text, combined)
 
     def test_history_restores_the_full_agent_trace(self) -> None:
+        index = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
         script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
 
         self.assertIn("function restoreCompletedAnalysis", script)
+        self.assertIn("function buildTraceFromSavedResult", script)
         self.assertIn("renderAgentTrace(trace)", script)
-        self.assertIn("历史分析流程已恢复", script)
+        self.assertIn("历史分析流程已完整恢复", script)
+        self.assertIn("已根据历史结果恢复执行过程", script)
+        self.assertIn('id="showWorkflowButton"', index)
+        self.assertIn("流程历史版 08-18B", index)
         self.assertIn(
             "restoreCompletedAnalysis(user?.content||'',items[assistantIndex].payload)",
             script,
