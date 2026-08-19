@@ -6,8 +6,8 @@
     <meta name="description" content="问数 · 描述性数据分析 Agent" />
     <meta name="askdata-layout" content="classic-workspace-v1" />
     <title>问数 · 描述性数据分析</title>
-    <link rel="stylesheet" href="./styles.css?v=20260818-history-trace-v2" />
-    <link rel="stylesheet" href="./dashboard.css?v=20260818-history-trace-v2" />
+    <link rel="stylesheet" href="./styles.css?v=20260818-demo-accuracy-v1" />
+    <link rel="stylesheet" href="./dashboard.css?v=20260818-demo-accuracy-v1" />
     <style>.analysis-boundary{max-width:760px!important;margin:-15px auto 0!important;padding:10px 14px;border:1px solid #e7e9ef;border-radius:10px;color:#7b8494!important;background:#fff;font-size:11px!important;line-height:1.6!important}</style>
   </head>
   <body data-layout="classic-workspace">
@@ -36,8 +36,8 @@
 
       <main class="workspace">
         <header class="topbar">
-          <button class="mobile-menu" id="mobileMenu" type="button" aria-label="展开历史会话" aria-controls="historySidebar" aria-expanded="false"><span>☰</span><strong>历史会话</strong></button>
-          <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1><span class="build-badge">流程历史版 08-18B</span></div>
+          <button class="mobile-menu" id="mobileMenu" type="button" aria-label="展开历史会话" aria-controls="historySidebar" aria-expanded="false"><span>☰</span></button>
+          <div><span class="eyebrow">问数工作台</span><h1>描述性数据分析助手</h1></div>
           <div class="topbar-actions"><span class="secure-badge">◈ 安全查询</span><button class="tester-mode-button" id="testerModeButton" type="button" title="输入测试码后不限提问次数">测试模式</button><button class="account-button" id="logoutButton" title="清空当前访客会话并重新开始"><span class="avatar" id="userAvatar">访</span><span class="account-name" id="accountName">正在进入工作台</span><span class="logout-label">重置体验</span></button></div>
         </header>
 
@@ -55,10 +55,9 @@
             <div class="welcome-orb"><span>✦</span></div>
             <p class="eyebrow">NATURAL LANGUAGE → DESCRIPTIVE ANALYSIS</p>
             <h2>今天想了解哪些经营数据？</h2>
-            <p>直接提问，问数会基于现有数据回答“发生了什么”，支持趋势、排名、占比、对比和分布分析。</p>
+            <p>直接提问，问数会基于现有数据回答“发生了什么”，支持销售趋势、产品排行和期间对比。</p>
             <div class="suggestion-grid">
               <button class="suggestion" data-query="最近30天销售额趋势如何？"><span class="suggestion-icon blue">↗</span><span><strong>分析趋势</strong><small>最近30天销售额趋势如何？</small></span></button>
-              <button class="suggestion" data-query="各区域已完成订单量排名是什么？"><span class="suggestion-icon violet">≡</span><span><strong>对比排名</strong><small>各区域已完成订单量排名是什么？</small></span></button>
               <button class="suggestion" data-query="已完成订单中，销售额最高的前5个产品是哪些？"><span class="suggestion-icon amber">%</span><span><strong>产品排行</strong><small>已完成订单中，销售额最高的前5个产品是哪些？</small></span></button>
               <button class="suggestion" data-query="本月与上月已完成订单销售额相比变化多少？"><span class="suggestion-icon green">⇄</span><span><strong>期间对比</strong><small>本月与上月已完成订单销售额相比变化多少？</small></span></button>
             </div>
@@ -105,7 +104,7 @@
       </main>
     </div>
     <script src="./preview-bootstrap.js" defer></script>
-    <script src="./app.js?v=20260818-history-trace-v2" defer></script>
-    <script src="./downloads.js?v=20260818-history-trace-v2" defer></script>
+    <script src="./app.js?v=20260818-demo-accuracy-v1" defer></script>
+    <script src="./downloads.js?v=20260818-demo-accuracy-v1" defer></script>
   </body>
 </html>

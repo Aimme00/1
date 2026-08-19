@@ -50,6 +50,8 @@ class MvpProductSurfaceTestCase(unittest.TestCase):
             "当前版本不提供异常诊断、原因归因、预测或策略建议。",
         ):
             self.assertIn(text, combined)
+        self.assertNotIn("对比排名", index)
+        self.assertNotIn("<strong>历史会话</strong>", index)
 
     def test_history_restores_the_full_agent_trace(self) -> None:
         index = (PROJECT_ROOT / "web" / "index.html").read_text(encoding="utf-8")
@@ -61,7 +63,6 @@ class MvpProductSurfaceTestCase(unittest.TestCase):
         self.assertIn("历史分析流程已完整恢复", script)
         self.assertIn("已根据历史结果恢复执行过程", script)
         self.assertIn('id="showWorkflowButton"', index)
-        self.assertIn("流程历史版 08-18B", index)
         self.assertIn(
             "restoreCompletedAnalysis(user?.content||'',items[assistantIndex].payload)",
             script,
@@ -115,6 +116,10 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
         )
         values = [row["sales_amount"] for row in response["table"]["rows"]]
         self.assertTrue(all(value >= 0 for value in values))
+        dates = [date.fromisoformat(row["order_date"]) for row in response["table"]["rows"]]
+        self.assertEqual(dates, [dates[0] + timedelta(days=offset) for offset in range(30)])
+        self.assertIn("完整覆盖", response["answer"])
+        self.assertIn("30 个自然日", response["answer"])
 
     def test_agent_trace_exposes_concrete_result_for_every_step(self) -> None:
         response = self.assert_query_success(
@@ -171,26 +176,34 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
         )
         self.assertTrue(completed["analysis"]["answer"])
 
-    def test_region_order_ranking_is_sorted(self) -> None:
-        response = self.assert_query_success(
-            "各区域已完成订单量排名是什么？", ["region", "order_count"], 6
-        )
-        values = [row["order_count"] for row in response["table"]["rows"]]
-        self.assertEqual(values, sorted(values, reverse=True))
-
     def test_top_five_products_are_sorted(self) -> None:
         response = self.assert_query_success(
             "已完成订单中，销售额最高的前5个产品是哪些？", ["product_name", "sales_amount"], 5
         )
         values = [row["sales_amount"] for row in response["table"]["rows"]]
         self.assertEqual(values, sorted(values, reverse=True))
+        self.assertIn("前5名", response["answer"])
+        for row in response["table"]["rows"]:
+            self.assertIn(row["product_name"], response["answer"])
 
     def test_month_comparison_is_executable(self) -> None:
-        self.assert_query_success(
+        response = self.assert_query_success(
             "本月与上月已完成订单销售额相比变化多少？",
             ["sales_month", "sales_amount"],
             2,
         )
+        previous, current = response["table"]["rows"]
+        delta = current["sales_amount"] - previous["sales_amount"]
+        rate = delta / abs(previous["sales_amount"]) * 100
+        for expected_text in (
+            previous["sales_month"],
+            current["sales_month"],
+            f'{previous["sales_amount"]:,.2f}'.rstrip("0").rstrip("."),
+            f'{current["sales_amount"]:,.2f}'.rstrip("0").rstrip("."),
+            f"{abs(delta):,.2f}".rstrip("0").rstrip("."),
+            f"{abs(rate):,.2f}".rstrip("0").rstrip("."),
+        ):
+            self.assertIn(expected_text, response["answer"])
 
     def test_verified_trend_chart_matches_the_returned_table_exactly(self) -> None:
         result = self.pipeline.run(
@@ -210,6 +223,9 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
             chart["option"]["series"][0]["data"],
             [row["sales_amount"] for row in rows],
         )
+        script = (PROJECT_ROOT / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("完整覆盖 30 天", script)
+        self.assertIn("thirtyDaySeries", script)
 
     def test_all_verified_postgres_sql_is_parseable_and_read_only(self) -> None:
         validator = SQLValidator(
@@ -279,10 +295,6 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
             if date.fromisoformat(row["order_date"]) >= cutoff:
                 trend[row["order_date"]] += row["sales_amount"]
 
-        regions = defaultdict(int)
-        for row in completed:
-            regions[customers[row["customer_id"]]] += 1
-
         product_sales = defaultdict(float)
         for item in items:
             if item["order_id"] in order_by_id:
@@ -299,18 +311,20 @@ class MvpCoreOfflineSmokeTestCase(unittest.TestCase):
 
         expected = {
             VERIFIED_DEMO_QUESTIONS[0].question: [
-                {"order_date": key, "sales_amount": round(value, 2)}
-                for key, value in sorted(trend.items())
+                {
+                    "order_date": (cutoff + timedelta(days=offset)).isoformat(),
+                    "sales_amount": round(
+                        trend.get((cutoff + timedelta(days=offset)).isoformat(), 0),
+                        2,
+                    ),
+                }
+                for offset in range(30)
             ],
             VERIFIED_DEMO_QUESTIONS[1].question: [
-                {"region": key, "order_count": value}
-                for key, value in sorted(regions.items(), key=lambda item: (-item[1], item[0]))
-            ],
-            VERIFIED_DEMO_QUESTIONS[2].question: [
                 {"product_name": key, "sales_amount": round(value, 2)}
                 for key, value in sorted(product_sales.items(), key=lambda item: (-item[1], item[0]))[:5]
             ],
-            VERIFIED_DEMO_QUESTIONS[3].question: [
+            VERIFIED_DEMO_QUESTIONS[2].question: [
                 {"sales_month": key, "sales_amount": round(value, 2)}
                 for key, value in sorted(monthly.items())
             ],

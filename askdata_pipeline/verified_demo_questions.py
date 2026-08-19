@@ -74,45 +74,79 @@ VERIFIED_DEMO_QUESTIONS: Tuple[VerifiedDemoQuestion, ...] = (
         operation_instruction="筛选最近30天已完成订单，按订单日期汇总销售额并按日期升序排列",
         output_target="orders.order_date、销售额 sales_amount",
         sql_by_dialect={
-            "sqlite": """SELECT order_date, ROUND(SUM(sales_amount), 2) AS sales_amount
-FROM orders
-WHERE order_status = 'completed'
-  AND order_date >= DATE((SELECT MAX(order_date) FROM orders), '-29 days')
-  AND order_date <= DATE((SELECT MAX(order_date) FROM orders))
-GROUP BY order_date
-ORDER BY order_date ASC""",
-            "postgres": """SELECT order_date, ROUND(SUM(sales_amount)::NUMERIC, 2) AS sales_amount
-FROM orders
-WHERE order_status = 'completed'
-  AND order_date >= (SELECT MAX(order_date) FROM orders) - INTERVAL '29 days'
-  AND order_date <= (SELECT MAX(order_date) FROM orders)
-GROUP BY order_date
-ORDER BY order_date ASC""",
+            "sqlite": """WITH bounds AS (
+    SELECT DATE(MAX(order_date)) AS max_date FROM orders
+), dates AS (
+    SELECT DATE((SELECT max_date FROM bounds), '-29 days') AS order_date
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-28 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-27 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-26 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-25 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-24 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-23 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-22 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-21 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-20 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-19 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-18 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-17 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-16 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-15 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-14 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-13 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-12 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-11 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-10 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-9 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-8 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-7 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-6 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-5 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-4 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-3 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-2 days')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds), '-1 day')
+    UNION ALL SELECT DATE((SELECT max_date FROM bounds))
+), daily AS (
+    SELECT DATE(orders.order_date) AS order_date,
+           ROUND(SUM(orders.sales_amount), 2) AS sales_amount
+    FROM orders
+    WHERE orders.order_status = 'completed'
+      AND DATE(orders.order_date) BETWEEN
+          DATE((SELECT max_date FROM bounds), '-29 days')
+          AND (SELECT max_date FROM bounds)
+    GROUP BY DATE(orders.order_date)
+)
+SELECT dates.order_date, COALESCE(daily.sales_amount, 0) AS sales_amount
+FROM dates
+LEFT JOIN daily ON daily.order_date = dates.order_date
+ORDER BY dates.order_date ASC""",
+            "postgres": """WITH bounds AS (
+    SELECT MAX(order_date)::DATE AS max_date FROM orders
+), dates AS (
+    SELECT GENERATE_SERIES(
+        bounds.max_date - INTERVAL '29 days',
+        bounds.max_date,
+        INTERVAL '1 day'
+    )::DATE AS order_date
+    FROM bounds
+), daily AS (
+    SELECT orders.order_date::DATE AS order_date,
+           ROUND(SUM(orders.sales_amount)::NUMERIC, 2) AS sales_amount
+    FROM orders
+    WHERE orders.order_status = 'completed'
+      AND orders.order_date::DATE BETWEEN
+          (SELECT max_date FROM bounds) - INTERVAL '29 days'
+          AND (SELECT max_date FROM bounds)
+    GROUP BY orders.order_date::DATE
+)
+SELECT dates.order_date, COALESCE(daily.sales_amount, 0::NUMERIC) AS sales_amount
+FROM dates
+LEFT JOIN daily ON daily.order_date = dates.order_date
+ORDER BY dates.order_date ASC""",
         },
         expected_columns=("order_date", "sales_amount"),
         expected_rows=30,
-    ),
-    VerifiedDemoQuestion(
-        question="各区域已完成订单量排名是什么？",
-        processing_objects="customers.region、customers.customer_id、orders.customer_id、orders.order_id、orders.order_status",
-        operation_instruction="关联客户与订单，筛选已完成订单，按区域统计订单量并从高到低排名",
-        output_target="customers.region、订单量 order_count",
-        sql_by_dialect={
-            "sqlite": """SELECT c.region AS region, COUNT(o.order_id) AS order_count
-FROM customers AS c
-JOIN orders AS o ON o.customer_id = c.customer_id
-WHERE o.order_status = 'completed'
-GROUP BY c.region
-ORDER BY order_count DESC, region ASC""",
-            "postgres": """SELECT c.region AS region, COUNT(o.order_id) AS order_count
-FROM customers AS c
-JOIN orders AS o ON o.customer_id = c.customer_id
-WHERE o.order_status = 'completed'
-GROUP BY c.region
-ORDER BY order_count DESC, region ASC""",
-        },
-        expected_columns=("region", "order_count"),
-        expected_rows=6,
     ),
     VerifiedDemoQuestion(
         question="已完成订单中，销售额最高的前5个产品是哪些？",

@@ -35,10 +35,54 @@ function renderSql(sql){$('sqlCode').textContent=sql.text||'-- 本次问答未�
 function renderFollowups(items){const box=$('followups');box.innerHTML=items.slice(0,4).map(q=>`<button data-followup="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');box.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>{$('queryInput').value=button.dataset.followup;$('queryInput').focus()}))}
 function renderDrillActions(items){const panel=$('drillPanel');const box=$('drillActions');box.innerHTML='';panel.classList.toggle('hidden',!items.length);items.forEach(action=>{const button=document.createElement('button');button.className='drill-action';button.innerHTML=`<span class="drill-direction">${action.direction==='up'?'↑':'↓'}</span>${escapeHtml(action.label)}`;button.onclick=()=>submitDrilldown(action);box.append(button)})}
 async function submitDrilldown(action){if(state.quotaRemaining===0)return toast('本次体验的 2 次提问已全部使用完');const parentRunId=state.result?.run_id;if(!parentRunId)return toast('当前结果无法继续钻取');showAnalysisWorkspace();state.savedAnalysisId=null;$('welcomePanel').classList.add('hidden');$('conversationView').classList.remove('hidden');$('resultView').classList.add('hidden');$('runCard').classList.remove('hidden');$('cancelButton').classList.remove('hidden');$('userMessage').textContent=action.label;resetWorkflowSteps();$('runStatus').textContent=action.direction==='up'?'正在上卷分析':'正在下钻分析';$('sendButton').disabled=true;try{const created=await api('/api/drilldown',{method:'POST',body:JSON.stringify({parent_run_id:parentRunId,query:action.query,direction:action.direction,generate_chart:null})});state.runId=created.run_id;showQuota(created.quota);connectEvents(created.events_url)}catch(error){showError(error.message)}}
-function renderChart(chart){const panel=$('chartPanel');if(!chart){panel.classList.add('hidden');return}panel.classList.remove('hidden');$('chartTitle').textContent=chart.title||'数据可视化';const option=chart.option||chart.echarts_option||chart;requestAnimationFrame(()=>drawCanvasChart(option,$('chartCanvas')))}
+function renderChart(chart){const panel=$('chartPanel');if(!chart){panel.classList.add('hidden');return}panel.classList.remove('hidden');$('chartTitle').textContent=chart.title||'数据可视化';const option=chart.option||chart.echarts_option||chart;const categories=option.xAxis?.data||[];$('chartLegend').textContent=categories.length===30?`完整覆盖 30 天 · ${categories[0]} 至 ${categories[29]}`:'';requestAnimationFrame(()=>drawCanvasChart(option,$('chartCanvas')))}
 function formatChartNumber(value){return Number(value||0).toLocaleString('zh-CN',{maximumFractionDigits:2})}
 function niceAxisMax(value){const rough=Math.max(Number(value)||1,1)*1.15;const magnitude=10**Math.floor(Math.log10(rough));const normalized=rough/magnitude;const step=normalized<=1?1:normalized<=2?2:normalized<=2.5?2.5:normalized<=5?5:10;return step*magnitude}
-function drawCanvasChart(option,canvas){const rect=canvas.getBoundingClientRect();const ratio=window.devicePixelRatio||1;const series=(option.series||[])[0]||{};const raw=series.data||[];const values=raw.map(v=>Number(typeof v==='object'?(v.value??0):v)||0);const bundledCategories=raw.every(v=>typeof v==='object'&&v!==null&&v.name!=null);const categories=bundledCategories?raw.map(v=>v.name):((option.orientation==='horizontal'?option.yAxis?.data:option.xAxis?.data)||raw.map((v,i)=>i+1));const horizontal=option.orientation==='horizontal';const displayHeight=horizontal?Math.max(320,values.length*28+58):300;canvas.style.height=`${displayHeight}px`;canvas.style.maxHeight=`${displayHeight}px`;canvas.width=rect.width*ratio;canvas.height=displayHeight*ratio;const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);const w=rect.width,h=displayHeight;if(!values.length)return;if(horizontal){const pad={l:170,r:72,t:22,b:36},plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b,bandH=plotH/values.length,axisMax=niceAxisMax(Math.max(...values,1));ctx.clearRect(0,0,w,h);ctx.strokeStyle='#e9ecf2';ctx.fillStyle='#8b93a3';ctx.font='10px sans-serif';ctx.textAlign='center';for(let i=0;i<=4;i++){const x=pad.l+plotW*i/4;ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,h-pad.b);ctx.stroke();ctx.fillText(formatChartNumber(axisMax*i/4),x,h-14)}values.forEach((v,i)=>{const y=pad.t+bandH*(i+.5),barH=Math.max(8,Math.min(18,bandH*.62)),barW=v/axisMax*plotW;ctx.fillStyle='#6075ed';ctx.fillRect(pad.l,y-barH/2,barW,barH);ctx.fillStyle='#526075';ctx.font='600 10px sans-serif';ctx.textAlign='right';ctx.fillText(String(categories[i]).slice(0,22),pad.l-10,y+3);ctx.textAlign='left';ctx.fillText(formatChartNumber(v),Math.min(w-pad.r+5,pad.l+barW+7),y+3)});return}const pad={l:66,r:24,t:34,b:48};ctx.clearRect(0,0,w,h);const axisMax=niceAxisMax(Math.max(...values,1)),plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b,bandW=plotW/values.length;ctx.strokeStyle='#e9ecf2';ctx.fillStyle='#8b93a3';ctx.font='10px sans-serif';ctx.textAlign='right';for(let i=0;i<=4;i++){const y=pad.t+plotH*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(formatChartNumber(axisMax*(4-i)/4),pad.l-8,y+3)}const bar=series.type==='bar';ctx.strokeStyle='#5269ec';ctx.fillStyle='#6075ed';ctx.lineWidth=2.2;ctx.beginPath();values.forEach((v,i)=>{const x=pad.l+bandW*(i+.5);const y=pad.t+plotH-(v/axisMax)*plotH;if(bar){const bw=Math.max(8,Math.min(48,bandW*.55));ctx.fillRect(x-bw/2,y,bw,pad.t+plotH-y)}else{i?ctx.lineTo(x,y):ctx.moveTo(x,y)}});if(!bar)ctx.stroke();values.forEach((v,i)=>{const x=pad.l+bandW*(i+.5);const y=pad.t+plotH-(v/axisMax)*plotH;if(!bar){ctx.fillStyle='#6075ed';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()}ctx.fillStyle='#526075';ctx.font='600 10px sans-serif';ctx.textAlign='center';ctx.fillText(formatChartNumber(v),x,Math.max(12,y-8));if(i%Math.ceil(values.length/8)===0){ctx.fillStyle='#8b93a3';ctx.font='10px sans-serif';ctx.fillText(String(categories[i]).slice(0,9),x,h-22)}})}
+function drawCanvasChart(option,canvas){
+  const rect=canvas.getBoundingClientRect();
+  const ratio=window.devicePixelRatio||1;
+  const series=(option.series||[])[0]||{};
+  const raw=series.data||[];
+  const values=raw.map(v=>Number(typeof v==='object'?(v.value??0):v)||0);
+  const bundledCategories=raw.every(v=>typeof v==='object'&&v!==null&&v.name!=null);
+  const categories=bundledCategories?raw.map(v=>v.name):((option.orientation==='horizontal'?option.yAxis?.data:option.xAxis?.data)||raw.map((v,i)=>i+1));
+  const horizontal=option.orientation==='horizontal';
+  const thirtyDaySeries=!horizontal&&values.length===30&&categories.every(value=>/^\d{4}-\d{2}-\d{2}/.test(String(value)));
+  const displayHeight=horizontal?Math.max(320,values.length*28+58):(thirtyDaySeries?360:300);
+  canvas.style.height=`${displayHeight}px`;
+  canvas.style.maxHeight=`${displayHeight}px`;
+  canvas.width=rect.width*ratio;
+  canvas.height=displayHeight*ratio;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(ratio,ratio);
+  const w=rect.width,h=displayHeight;
+  if(!values.length)return;
+  if(horizontal){
+    const pad={l:170,r:72,t:22,b:36},plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b,bandH=plotH/values.length,axisMax=niceAxisMax(Math.max(...values,1));
+    ctx.clearRect(0,0,w,h);ctx.strokeStyle='#e9ecf2';ctx.fillStyle='#8b93a3';ctx.font='10px sans-serif';ctx.textAlign='center';
+    for(let i=0;i<=4;i++){const x=pad.l+plotW*i/4;ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,h-pad.b);ctx.stroke();ctx.fillText(formatChartNumber(axisMax*i/4),x,h-14)}
+    values.forEach((v,i)=>{const y=pad.t+bandH*(i+.5),barH=Math.max(8,Math.min(18,bandH*.62)),barW=v/axisMax*plotW;ctx.fillStyle='#6075ed';ctx.fillRect(pad.l,y-barH/2,barW,barH);ctx.fillStyle='#526075';ctx.font='600 10px sans-serif';ctx.textAlign='right';ctx.fillText(String(categories[i]).slice(0,22),pad.l-10,y+3);ctx.textAlign='left';ctx.fillText(formatChartNumber(v),Math.min(w-pad.r+5,pad.l+barW+7),y+3)});
+    return;
+  }
+  const pad={l:66,r:24,t:34,b:thirtyDaySeries?82:48};
+  ctx.clearRect(0,0,w,h);
+  const axisMax=niceAxisMax(Math.max(...values,1)),plotW=w-pad.l-pad.r,plotH=h-pad.t-pad.b,bandW=plotW/values.length;
+  ctx.strokeStyle='#e9ecf2';ctx.fillStyle='#8b93a3';ctx.font='10px sans-serif';ctx.textAlign='right';
+  for(let i=0;i<=4;i++){const y=pad.t+plotH*i/4;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();ctx.fillText(formatChartNumber(axisMax*(4-i)/4),pad.l-8,y+3)}
+  const bar=series.type==='bar';
+  ctx.strokeStyle='#5269ec';ctx.fillStyle='#6075ed';ctx.lineWidth=2.2;ctx.beginPath();
+  values.forEach((v,i)=>{const x=pad.l+bandW*(i+.5);const y=pad.t+plotH-(v/axisMax)*plotH;if(bar){const bw=Math.max(8,Math.min(48,bandW*.55));ctx.fillRect(x-bw/2,y,bw,pad.t+plotH-y)}else{i?ctx.lineTo(x,y):ctx.moveTo(x,y)}});
+  if(!bar)ctx.stroke();
+  const extrema=new Set([0,values.length-1,values.indexOf(Math.max(...values)),values.indexOf(Math.min(...values))]);
+  values.forEach((v,i)=>{
+    const x=pad.l+bandW*(i+.5),y=pad.t+plotH-(v/axisMax)*plotH;
+    if(!bar){ctx.fillStyle='#6075ed';ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill()}
+    if(!thirtyDaySeries||extrema.has(i)){ctx.fillStyle='#526075';ctx.font='600 10px sans-serif';ctx.textAlign='center';ctx.fillText(formatChartNumber(v),x,Math.max(12,y-8))}
+    ctx.fillStyle='#8b93a3';ctx.font='9px sans-serif';
+    if(thirtyDaySeries){ctx.save();ctx.translate(x,h-70);ctx.rotate(-Math.PI/3);ctx.textAlign='right';ctx.fillText(String(categories[i]).slice(5,10),0,0);ctx.restore()}
+    else if(i%Math.ceil(values.length/8)===0){ctx.textAlign='center';ctx.fillText(String(categories[i]).slice(0,9),x,h-22)}
+  });
+}
 function showError(message){$('runStatus').textContent=message;$('runCard').classList.remove('hidden');$('cancelButton').classList.add('hidden');toast(message);state.runId=null;$('sendButton').disabled=state.quotaRemaining===0}
 async function cancelRun(){if(!state.runId)return;try{await api(`/api/runs/${state.runId}/cancel`,{method:'POST'});$('runStatus').textContent='正在取消…'}catch(error){toast(error.message)}}
 function openHistorySidebar(){document.querySelector('.sidebar').classList.add('open');document.body.classList.add('sidebar-open');$('mobileMenu').setAttribute('aria-expanded','true')}
