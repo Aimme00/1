@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>问数｜静态体验 Demo</title>
+  <meta name="description" content="问数 AI 数据分析 Agent 静态体验 Demo">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">问</span><div><b>问数</b><small>AI Analytics</small></div></div>
+      <button class="new-analysis" id="newAnalysis">＋ <span>新建分析</span></button>
+      <button class="side-link" id="dashboardButton">▦ <span>我的仪表盘</span><em id="dashboardCount">0</em></button>
+      <p class="side-label">最近会话</p>
+      <div id="historyList" class="history-list"><span class="empty-side">还没有分析记录</span></div>
+      <div class="sidebar-foot"><i></i><div><b>离线演示数据</b><small>POSTGRES · 只读快照</small></div></div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div><small>问数工作台</small><h1>描述性数据分析助手</h1></div>
+        <div class="top-actions"><span>◇ 安全查询</span><strong>静态演示</strong><b>ID</b><label>Interview Demo</label></div>
+      </header>
+
+      <section class="welcome" id="welcome">
+        <div class="spark">✦</div>
+        <p>NATURAL LANGUAGE → DESCRIPTIVE ANALYSIS</p>
+        <h2>今天想了解哪些经营数据？</h2>
+        <div class="suggestions">
+          <button data-scenario="trend"><i>↗</i><span><b>分析趋势</b><small>最近30天销售额趋势如何？</small></span></button>
+          <button data-scenario="products"><i>％</i><span><b>产品排行</b><small>已完成订单中，销售额最高的前5个产品是哪些？</small></span></button>
+          <button data-scenario="compare"><i>⇄</i><span><b>期间对比</b><small>本月与上月已完成订单销售额相比变化多少？</small></span></button>
+        </div>
+        <div class="scope-note">演示基于固定数据快照，仅提供趋势、产品排行和期间对比三类描述性分析。</div>
+      </section>
+
+      <section class="result-view hidden" id="resultView">
+        <div class="question-banner" id="questionBanner"></div>
+        <section class="workflow-card">
+          <div class="section-heading"><div><small>AGENT WORKFLOW</small><h2>Agent 执行过程</h2></div><span>离线流程回放</span></div>
+          <div class="workflow-status"><i></i><b id="workflowStatus">问数正在分析</b><small>每个步骤均展示实际演示结果</small></div>
+          <div class="workflow-grid" id="workflowGrid"></div>
+        </section>
+
+        <section class="answer-card">
+          <small>分析结论</small><h2 id="answerTitle">分析完成</h2><div id="answerText"></div>
+          <p class="data-source">固定演示快照 · PostgreSQL · <span id="rowCount"></span></p>
+        </section>
+
+        <div class="insight-grid" id="insightGrid"></div>
+
+        <section class="chart-card" id="chartCard">
+          <div class="section-heading"><div><small>VISUALIZATION</small><h2 id="chartTitle"></h2></div></div>
+          <canvas id="chartCanvas" width="1400" height="520"></canvas>
+        </section>
+
+        <section class="data-card">
+          <div class="section-heading"><div><small>RAW DATA</small><h2>数据明细</h2></div><span id="tableRows"></span></div>
+          <div class="table-wrap"><table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
+        </section>
+
+        <section class="sql-card">
+          <div class="sql-title"><span>SQL</span><b>实际演示查询</b><small>postgres · 离线快照</small></div>
+          <pre id="sqlText"></pre>
+          <button id="copySql">复制 SQL</button>
+        </section>
+
+        <div class="result-actions">
+          <button class="primary" id="saveAnalysis">☆ 保存分析</button>
+          <button id="addDashboard">▦ 添加到仪表盘</button>
+          <button id="downloadCsv">↓ 下载 CSV</button>
+          <button id="downloadExcel">↓ 下载 Excel</button>
+          <button id="downloadPng">↓ 下载图表 PNG</button>
+        </div>
+      </section>
+
+      <form class="composer" id="queryForm">
+        <label for="queryInput">询问数据，例如：最近30天销售额趋势如何？</label>
+        <div><input id="queryInput" autocomplete="off" placeholder="输入三类演示问题之一"><button aria-label="发送">↑</button></div>
+        <p>只读查询 · SQL 安全校验 · 静态演示不限次数</p>
+      </form>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
